@@ -532,24 +532,24 @@ DEFAULT_GREP_ANSI_COLORS = {
     'ne':False
 }
 
-def _pattern_escape_invert(pattern, chars):
+def _expression_escape_invert(expression, chars):
     '''
-    Inverts regex pattern escape characters. This is helpful to transform format string from basic
+    Inverts regex expression escape characters. This is helpful to transform format string from basic
     to extended regex format (and vice-versa).
     ex: \( -> ( and ( -> \(
     '''
     for char in chars:
         escaped_char = '\\' + char
-        pattern_split = pattern.split(escaped_char)
-        new_pattern_split = []
-        for piece in pattern_split:
-            new_pattern_split.append(piece.replace(char, escaped_char))
-        pattern = char.join(new_pattern_split)
-    return pattern
+        expression_split = expression.split(escaped_char)
+        new_expression_split = []
+        for piece in expression_split:
+            new_expression_split.append(piece.replace(char, escaped_char))
+        expression = char.join(new_expression_split)
+    return expression
 
-def _parse_patterns(patterns):
+def _parse_expressions(expressions):
     # Split for both \r\n and \n
-    return [y for x in patterns.split('\r\n') for y in x.split('\n')]
+    return [y for x in expressions.split('\r\n') for y in x.split('\n')]
 
 class Grep:
     '''
@@ -576,11 +576,18 @@ class Grep:
         SKIP = enum.auto()
 
     def __init__(self, print_file=None):
+        '''
+        Initializes Grep
+        Inputs: print_file - a file object to pass to print() as 'file' or None for stdout
+        '''
         self.reset()
         self._print_file = print_file
 
     def reset(self):
-        self._patterns = []
+        '''
+        Resets all Grep state values except for the print file.
+        '''
+        self._expressions = []
         self._files = []
         self._search_type = __class__.SearchType.BASIC_REGEXP
         self._ignore_case = False
@@ -598,25 +605,38 @@ class Grep:
         self._name_num_sep = ':'
         self._name_byte_sep = ':'
         self._color_output_mode = __class__.ColorOutputMode.AUTO
-        self._directory_fn = __class__.Directory.READ
+        self._directory_handling_type = __class__.Directory.READ
         self._label = '(standard input)'
         self._quiet = False
         self._only_matching = False
         self._binary_parse_function = __class__.BinaryParseFunction.PRINT_ERROR
         self._strip_cr = True
 
-    def add_patterns(self, pattern_or_patterns):
-        if isinstance(pattern_or_patterns, list):
-            self._patterns.extend(pattern_or_patterns)
-        elif isinstance(pattern_or_patterns, str):
-            self._patterns.append(pattern_or_patterns)
+    def add_expression(self, expression_or_expressions):
+        '''
+        Adds a single expression or list of expressions that Grep will search for in selected files.
+        Inputs: expression_or_expressions - must be of type list or str
+        '''
+        if isinstance(expression_or_expressions, list):
+            self._expressions.extend(expression_or_expressions)
+        elif isinstance(expression_or_expressions, str):
+            self._expressions.append(expression_or_expressions)
         else:
-            raise TypeError('Invalid type ({}) for pattern_or_patterns'.format(type(pattern_or_patterns)))
+            raise TypeError('Invalid type ({}) for expression_or_expressions'
+                            .format(type(expression_or_expressions)))
 
-    def clear_patterns(self):
-        self._patterns.clear()
+    def clear_expressions(self):
+        '''
+        Clears all expressions that were previously set by add_expression().
+        '''
+        self._expressions.clear()
 
     def add_files(self, file_or_files):
+        '''
+        Adds a single file or list of files that Grep will crawl through. Each entry must be a path
+        to a file or directory. Directories are handled based on value of directory_handling_type.
+        Inputs: file_or_files - must be of type list or str
+        '''
         if isinstance(file_or_files, list):
             self._files.extend(file_or_files)
         elif isinstance(file_or_files, str):
@@ -625,10 +645,16 @@ class Grep:
             raise TypeError('Invalid type ({}) for file_or_files'.format(type(file_or_files)))
 
     def clear_files(self):
+        '''
+        Clear all files that were previously set by add_files().
+        '''
         self._files = []
 
     @property
     def search_type(self):
+        '''
+        Grep.SearchType: The search type which sets how expressions are parsed.
+        '''
         return self._search_type
 
     @search_type.setter
@@ -639,6 +665,9 @@ class Grep:
 
     @property
     def ignore_case(self):
+        '''
+        Boolean: when true, expression's case is ignored during search
+        '''
         return self._ignore_case
 
     @ignore_case.setter
@@ -647,6 +676,9 @@ class Grep:
 
     @property
     def word_regexp(self):
+        '''
+        Boolean: when true, regex search is performed using pattern \\b{expr}\\b
+        '''
         return self._word_regexp
 
     @word_regexp.setter
@@ -655,6 +687,9 @@ class Grep:
 
     @property
     def line_regexp(self):
+        '''
+        Boolean: when true, line regex search is used
+        '''
         return self._line_regexp
 
     @line_regexp.setter
@@ -663,6 +698,9 @@ class Grep:
 
     @property
     def no_messages(self):
+        '''
+        Boolean: when true, no error messages are printed
+        '''
         return self._no_messages
 
     @no_messages.setter
@@ -671,6 +709,9 @@ class Grep:
 
     @property
     def invert_match(self):
+        '''
+        Boolean: when true, matching lines are those that don't match expression
+        '''
         return self._invert_match
 
     @invert_match.setter
@@ -679,6 +720,9 @@ class Grep:
 
     @property
     def max_count(self):
+        '''
+        None or int: when set, this is the maximum number of matching lines printed for each file
+        '''
         return self._max_count
 
     @max_count.setter
@@ -687,6 +731,9 @@ class Grep:
 
     @property
     def output_line_numbers(self):
+        '''
+        Boolean: when true, line number of match is printed before result
+        '''
         return self._output_line_numbers
 
     @output_line_numbers.setter
@@ -695,22 +742,31 @@ class Grep:
 
     @property
     def output_file_name(self):
+        '''
+        Boolean: when true, file name is printed before result
+        '''
         return self._output_file_name
 
     @output_file_name.setter
-    def output_file_name(self, output_file_name=True):
+    def output_file_name(self, output_file_name):
         self._output_file_name = output_file_name
 
     @property
     def output_byte_offset(self):
+        '''
+        Boolean: when true, byte offset is printed before result
+        '''
         return self._output_byte_offset
 
     @output_byte_offset.setter
-    def output_byte_offset(self, output_byte_offset=True):
+    def output_byte_offset(self, output_byte_offset):
         self._output_byte_offset = output_byte_offset
 
     @property
     def line_buffered(self):
+        '''
+        Boolean: when true, each printed line is flushed before proceeding
+        '''
         return self._line_buffered
 
     @line_buffered.setter
@@ -719,6 +775,9 @@ class Grep:
 
     @property
     def label(self):
+        '''
+        String: the label to print when output_file_name is true and stdin is parsed
+        '''
         return self._label
 
     @label.setter
@@ -727,6 +786,9 @@ class Grep:
 
     @property
     def quiet(self):
+        '''
+        Boolean: when true, normal output is not printed
+        '''
         return self._quiet
 
     @quiet.setter
@@ -735,6 +797,9 @@ class Grep:
 
     @property
     def results_sep(self):
+        '''
+        String: the string printed after header information and before line contents
+        '''
         return self._results_sep
 
     @results_sep.setter
@@ -745,6 +810,9 @@ class Grep:
 
     @property
     def name_num_sep(self):
+        '''
+        String: the string printed before line number if both file name and line number are printed
+        '''
         return self._name_num_sep
 
     @name_num_sep.setter
@@ -755,6 +823,10 @@ class Grep:
 
     @property
     def name_byte_sep(self):
+        '''
+        String: the string printed before byte offset value if byte offset as well as either file
+        name or line number is printed.
+        '''
         return self._name_byte_sep
 
     @name_byte_sep.setter
@@ -765,6 +837,9 @@ class Grep:
 
     @property
     def color_output_mode(self):
+        '''
+        Grep.ColorOutputMode: sets when ANSI escape codes are printed
+        '''
         return self._color_output_mode
 
     @color_output_mode.setter
@@ -775,15 +850,10 @@ class Grep:
 
     @property
     def end(self):
+        '''
+        String: the sequence of characters expected at the end of each line ex: \\n
+        '''
         return self._end
-
-    @property
-    def directory_fn(self):
-        return self._directory_fn
-
-    @directory_fn.setter
-    def directory_fn(self, directory_fn):
-        self._directory_fn = directory_fn
 
     @end.setter
     def end(self, end):
@@ -792,7 +862,23 @@ class Grep:
         self._end = end
 
     @property
+    def directory_handling_type(self):
+        '''
+        Grep.Directory: sets how directories are handled when they are included in file list
+        '''
+        return self._directory_handling_type
+
+    @directory_handling_type.setter
+    def directory_handling_type(self, directory_handling_type):
+        if not isinstance(directory_handling_type, __class__.Directory):
+            raise TypeError('Invalid type ({}) for directory_handling_type'.format(type(directory_handling_type)))
+        self._directory_handling_type = directory_handling_type
+
+    @property
     def only_matching(self):
+        '''
+        Boolean: when true, only the matching contents are printed for each line
+        '''
         return self._only_matching
 
     @only_matching.setter
@@ -801,6 +887,9 @@ class Grep:
 
     @property
     def binary_parse_function(self):
+        '''
+        Grep.BinaryParseFunction: sets how binary files are handled
+        '''
         return self._binary_parse_function
 
     @binary_parse_function.setter
@@ -811,6 +900,9 @@ class Grep:
 
     @property
     def strip_cr(self):
+        '''
+        Boolean: when true, CR are stripped from the end of every line when found
+        '''
         return self._strip_cr
 
     @strip_cr.setter
@@ -849,7 +941,7 @@ class Grep:
         def __init__(self):
             self.files = []
             self.line_format = ''
-            self.patterns = []
+            self.expressions = []
             self.line_ending = b'\n'
             self.ignore_case = False
             self.fixed_string_parse = False
@@ -870,13 +962,6 @@ class Grep:
             self.print_fn = None
             self.binary_parse_function = Grep.BinaryParseFunction.PRINT_ERROR
             self.strip_cr = True
-
-        def set_color_mode(self, color_mode):
-            self.color_enabled = False
-            if color_mode == Grep.ColorOutputMode.ALWAYS:
-                self.color_enabled = True
-            elif color_mode == Grep.ColorOutputMode.AUTO:
-                self.color_enabled = sys.stdout.isatty()
 
         def set_file(self, file):
             '''
@@ -998,9 +1083,17 @@ class Grep:
         data.line_ending = self._end
         data.binary_parse_function = self._binary_parse_function
         data.strip_cr = self._strip_cr
-        data.set_color_mode(self._color_output_mode)
+        if self._color_output_mode == Grep.ColorOutputMode.ALWAYS:
+            data.color_enabled = True
+        elif self._color_output_mode == Grep.ColorOutputMode.AUTO:
+            if self._print_file is None:
+                data.color_enabled = sys.stdout.isatty()
+            else:
+                data.color_enabled = False
+        else:
+            data.color_enabled = False
         if not self._files:
-            if self.directory_fn == __class__.Directory.RECURSE:
+            if self.directory_handling_type == __class__.Directory.RECURSE:
                 data.files = [self._make_file_iterable('.')]
             else:
                 data.files = [StdinIterable(True, self.end, self._label)]
@@ -1028,28 +1121,28 @@ class Grep:
             name_byte_sep = self._name_byte_sep
             result_sep = self._results_sep
 
-        data.patterns = self._patterns
+        data.expressions = self._expressions
 
-        for i in range(len(data.patterns)):
+        for i in range(len(data.expressions)):
             if self._search_type == __class__.SearchType.FIXED_STRINGS:
                 if self._ignore_case:
-                    data.patterns[i] = data.patterns[i].lower()
+                    data.expressions[i] = data.expressions[i].lower()
             elif self._search_type == __class__.SearchType.BASIC_REGEXP:
                 # Transform basic regex string to extended
                 # The only difference with basic is that escaping of some characters is inverted
-                data.patterns[i] = _pattern_escape_invert(data.patterns[i], '?+{}|()')
+                data.expressions[i] = _expression_escape_invert(data.expressions[i], '?+{}|()')
 
             if self._word_regexp:
                 if self._search_type == __class__.SearchType.FIXED_STRINGS:
-                    # Transform pattern into regular expression
-                    data.patterns[i] = r"\b" + re.escape(data.patterns[i]) + r"\b"
+                    # Transform expression into regular expression
+                    data.expressions[i] = r"\b" + re.escape(data.expressions[i]) + r"\b"
                 else:
-                    data.patterns[i] = r"\b" + data.patterns[i] + r"\b"
+                    data.expressions[i] = r"\b" + data.expressions[i] + r"\b"
             elif self._line_regexp:
                 if self._search_type == __class__.SearchType.FIXED_STRINGS:
-                    # Transform pattern into regular expression
-                    data.patterns[i] = re.escape(data.patterns[i])
-            data.patterns[i] = data.patterns[i].encode()
+                    # Transform expression into regular expression
+                    data.expressions[i] = re.escape(data.expressions[i])
+            data.expressions[i] = data.expressions[i].encode()
 
         if self._word_regexp or self._line_regexp:
             # Force to regex parse
@@ -1102,19 +1195,19 @@ class Grep:
         Parses a line from a file, formats line, and prints the line if match is found.
         '''
         print_line = False
-        for pattern in data.patterns:
+        for expression in data.expressions:
             if data.fixed_string_parse:
-                loc = data.line.find(pattern)
+                loc = data.line.find(expression)
                 if loc >= 0:
                     print_line = not self._invert_match
                     if print_line and (data.color_enabled or self.only_matching):
                         while loc >= 0:
                             if data.color_enabled:
                                 data.formatted_line.apply_formatting(
-                                    data.matching_color, loc, len(pattern))
+                                    data.matching_color, loc, len(expression))
                             if self.only_matching:
-                                data.line_slices.append(slice(loc, loc + len(pattern)))
-                            loc = data.line.find(pattern, loc + len(pattern))
+                                data.line_slices.append(slice(loc, loc + len(expression)))
+                            loc = data.line.find(expression, loc + len(expression))
                 elif self._invert_match:
                     # Color setting is ignored in this case - just print it
                     print_line = True
@@ -1124,7 +1217,7 @@ class Grep:
                 if self._ignore_case:
                     flags = re.IGNORECASE
                 if self._line_regexp:
-                    m = re.fullmatch(pattern, data.line, flags)
+                    m = re.fullmatch(expression, data.line, flags)
                     if m is not None:
                         print_line = not self._invert_match
                         if data.color_enabled:
@@ -1137,7 +1230,7 @@ class Grep:
                         print_line = True
                 else:
                     line_matches = False
-                    for m in re.finditer(pattern, data.line, flags):
+                    for m in re.finditer(expression, data.line, flags):
                         line_matches = True
                         print_line = not self._invert_match
                         if data.color_enabled:
@@ -1173,8 +1266,8 @@ class Grep:
         Executes Grep with all the assigned attributes.
         Returns: a list of files with matches
         '''
-        if not self._patterns:
-            print('No patterns provided', file=sys.stderr)
+        if not self._expressions:
+            print('No expressions provided', file=sys.stderr)
             return None
 
         data = self._init_line_parsing_data()
@@ -1182,9 +1275,9 @@ class Grep:
 
         for file in data.files:
             if os.path.isdir(file.name):
-                if self._directory_fn == __class__.Directory.READ:
+                if self._directory_handling_type == __class__.Directory.READ:
                     print('{}: {}: Is a directory'.format(THIS_FILE_NAME, file.name))
-                elif self._directory_fn == __class__.Directory.RECURSE:
+                elif self._directory_handling_type == __class__.Directory.RECURSE:
                     for root, _, recurse_files in os.walk(file.name):
                         for recurse_file in recurse_files:
                             file_path = os.path.join(root, recurse_file)
@@ -1202,37 +1295,37 @@ class GrepArgParser:
     '''
     def __init__(self):
         self._parser = argparse.ArgumentParser(description='Partially implements grep command entirely in Python.', add_help=False)
-        self._parser.add_argument('patterns_positional', type=str, nargs='?', default=None, metavar='EXPRESSIONS',
+        self._parser.add_argument('expressions_positional', type=str, nargs='?', default=None, metavar='EXPRESSIONS',
                             help='Expressions to search for, separated by newline character (\\n). '
                             'This is required if --regexp or --file are not specified.')
         self._parser.add_argument('file', type=str, nargs='*', default=[], metavar='FILE',
                             help='Files or directories to search. Stdin will be searched if not specified. '
                             'How directories are handled is controled by -d and -r options.')
 
-        pattern_group = self._parser.add_argument_group('Expression Interpretation')
-        pattern_type = pattern_group.add_mutually_exclusive_group()
-        pattern_type.add_argument('-E', '--extended-regexp', action='store_true',
+        regexp_group = self._parser.add_argument_group('Expression Interpretation')
+        regexp_type = regexp_group.add_mutually_exclusive_group()
+        regexp_type.add_argument('-E', '--extended-regexp', action='store_true',
                                 help='EXPRESSIONS are extended regular expressions')
-        pattern_type.add_argument('-F', '--fixed-strings', action='store_true',
+        regexp_type.add_argument('-F', '--fixed-strings', action='store_true',
                                 help='EXPRESSIONS are strings')
-        pattern_type.add_argument('-G', '--basic-regexp', action='store_true',
+        regexp_type.add_argument('-G', '--basic-regexp', action='store_true',
                                 help='EXPRESSIONS are basic regular expressions')
-        pattern_group.add_argument('-e', '--regexp', dest='patterns_option', metavar='EXPRESSIONS', type=str,
+        regexp_group.add_argument('-e', '--regexp', dest='expressions_option', metavar='EXPRESSIONS', type=str,
                                 default=None,
                                 help='use EXPRESSIONS for matching')
-        pattern_group.add_argument('-f', '--file', metavar='FILE', dest='patterns_file', type=str, default=None,
+        regexp_group.add_argument('-f', '--file', metavar='FILE', dest='expressions_file', type=str, default=None,
                                 help='take EXPRESSIONS from FILE')
-        pattern_group.add_argument('-i', '--ignore-case', action='store_true',
+        regexp_group.add_argument('-i', '--ignore-case', action='store_true',
                                 help='ignore case in expressions')
-        pattern_group.add_argument('--no-ignore-case', dest='ignore_case', action='store_false',
+        regexp_group.add_argument('--no-ignore-case', dest='ignore_case', action='store_false',
                                 help='do not ignore case (default)')
-        pattern_group.add_argument('-w', '--word-regexp', action='store_true',
+        regexp_group.add_argument('-w', '--word-regexp', action='store_true',
                                 help='match whole words only')
-        pattern_group.add_argument('-x', '--line-regexp', action='store_true',
+        regexp_group.add_argument('-x', '--line-regexp', action='store_true',
                                 help='match whole lines only')
-        pattern_group.add_argument('--end', type=str, default='\n',
+        regexp_group.add_argument('--end', type=str, default='\n',
                                    help='newline character lines will be parsed by (default: \\n)')
-        pattern_group.add_argument('-z', '--null-data', action='store_true',
+        regexp_group.add_argument('-z', '--null-data', action='store_true',
                                    help='same as --end=\'\\0\'')
 
         misc_group = self._parser.add_argument_group('Miscellaneous')
@@ -1306,30 +1399,30 @@ class GrepArgParser:
             print('{} {}'.format(THIS_FILE_NAME, __version__))
             sys.exit(0)
 
-        # Pars patterns from all of the different options into a single list of patterns
-        patterns = []
-        if args.patterns_option is not None:
-            # Set patterns to the option
-            patterns.extend(_parse_patterns(args.patterns_option))
-            # The first positional (patterns_positional) is a file
-            args.file.insert(0, args.patterns_positional)
-        elif args.patterns_positional is not None:
-            # Set patterns to the positional
-            patterns.extend(_parse_patterns(args.patterns_positional))
+        # Pars expressions from all of the different options into a single list of expressions
+        expressions = []
+        if args.expressions_option is not None:
+            # Set expressions to the option
+            expressions.extend(_parse_expressions(args.expressions_option))
+            # The first positional (expressions_positional) is a file
+            args.file.insert(0, args.expressions_positional)
+        elif args.expressions_positional is not None:
+            # Set expressions to the positional
+            expressions.extend(_parse_expressions(args.expressions_positional))
 
-        if args.patterns_file is not None:
-            if not os.path.isfile(args.patterns_file):
-                print('Error: {} is not a file'.format(args.patterns_file), file=sys.stderr)
+        if args.expressions_file is not None:
+            if not os.path.isfile(args.expressions_file):
+                print('Error: {} is not a file'.format(args.expressions_file), file=sys.stderr)
                 return False
-            with open(args.patterns_file, 'r') as fp:
-                patterns.extend(_parse_patterns(fp.read()))
+            with open(args.expressions_file, 'r') as fp:
+                expressions.extend(_parse_expressions(fp.read()))
 
-        if not patterns:
+        if not expressions:
             self._parser.print_usage()
             print('Try --help for more information', file=sys.stderr)
             return False
 
-        grep_object.add_patterns(patterns)
+        grep_object.add_expression(expressions)
 
         if args.file:
             grep_object.add_files(args.file)
@@ -1358,14 +1451,14 @@ class GrepArgParser:
         grep_object.strip_cr = not args.binary
 
         if args.recursive or args.directories == 'recurse':
-            grep_object.directory_fn = Grep.Directory.RECURSE
+            grep_object.directory_handling_type = Grep.Directory.RECURSE
             if not args.no_filename:
                 # Force output of file name
                 grep_object.output_file_name = True
         elif args.directories == 'skip':
-            grep_object.directory_fn = Grep.Directory.SKIP
+            grep_object.directory_handling_type = Grep.Directory.SKIP
         else:
-            grep_object.directory_fn = Grep.Directory.READ
+            grep_object.directory_handling_type = Grep.Directory.READ
 
         if args.null_data:
             grep_object.end = b'\x00'
