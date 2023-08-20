@@ -1,6 +1,10 @@
 # greplica
 A grep clone in Python with both CLI and library interfaces, supporting ANSI color coding and more.
 
+## Installation
+This project is uploaded to PyPI at https://pypi.org/project/greplica/
+To install, ensure you are connected to the internet and execute: `python3 -m pip install greplica`
+
 ## CLI Help
 ```
 usage: grep.py [-E | -F | -G] [-e EXPRESSIONS] [-f FILE] [-i] [--no-ignore-case] [-w] [-x] [--end END] [-z] [-s] [-v] [-V] [--help] [-m NUM] [-b] [-n]
