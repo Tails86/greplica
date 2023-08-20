@@ -599,6 +599,7 @@ class Grep:
         self._files = []
         self._file_include_globs = []
         self._file_exclude_globs = []
+        self._dir_exclude_globs = []
         self._search_type = __class__.SearchType.BASIC_REGEXP
         self._ignore_case = False
         self._word_regexp = False
@@ -697,6 +698,17 @@ class Grep:
 
     def clear_file_exclude_globs(self):
         self._file_exclude_globs = []
+
+    def add_dir_exclude_globs(self, glob_or_globs):
+        if isinstance(glob_or_globs, list):
+            self._dir_exclude_globs.extend(glob_or_globs)
+        elif isinstance(glob_or_globs, str):
+            self._dir_exclude_globs.append(glob_or_globs)
+        else:
+            raise TypeError('Invalid type ({}) for glob_or_globs'.format(type(glob_or_globs)))
+
+    def clear_dir_exclude_globs(self):
+        self._dir_exclude_globs = []
 
     @property
     def search_type(self):
@@ -1570,6 +1582,15 @@ class Grep:
                 pass # Skip the rest of the file and continue
         return match_found
 
+    def _is_excluded_dir(self, dir_path):
+        exclude = False
+        base_name = os.path.basename(os.path.normpath(dir_path))
+        for g in self._dir_exclude_globs:
+            if fnmatch.fnmatch(base_name, g):
+                exclude = True
+                break
+        return exclude
+
     def execute(self):
         '''
         Executes Grep with all the assigned attributes.
@@ -1584,18 +1605,23 @@ class Grep:
 
         for file in data.files:
             if os.path.isdir(file.name):
-                if self._directory_handling_type == __class__.Directory.READ:
-                    print('{}: {}: Is a directory'.format(THIS_FILE_NAME, file.name))
-                elif (
-                    self._directory_handling_type == __class__.Directory.RECURSE
-                    or self._directory_handling_type == __class__.Directory.RECURSE_LINKS
-                ):
-                    followlinks = (self._directory_handling_type == __class__.Directory.RECURSE_LINKS)
-                    for root, _, recurse_files in os.walk(file.name, followlinks=followlinks):
-                        for recurse_file in recurse_files:
-                            file_path = os.path.join(root, recurse_file)
-                            if self._parse_file(self._make_file_iterable(file_path), data):
-                                matched_files += [file_path]
+                if not self._is_excluded_dir(file.name):
+                    if self._directory_handling_type == __class__.Directory.READ:
+                        print('{}: {}: Is a directory'.format(THIS_FILE_NAME, file.name))
+                    elif (
+                        self._directory_handling_type == __class__.Directory.RECURSE
+                        or self._directory_handling_type == __class__.Directory.RECURSE_LINKS
+                    ):
+                        followlinks = (self._directory_handling_type == __class__.Directory.RECURSE_LINKS)
+                        for root, dirs, recurse_files in os.walk(file.name, followlinks=followlinks):
+                            if not self._is_excluded_dir(root):
+                                for recurse_file in recurse_files:
+                                    file_path = os.path.join(root, recurse_file)
+                                    if self._parse_file(self._make_file_iterable(file_path), data):
+                                        matched_files += [file_path]
+                            else:
+                                # Do nothing and exclude anything that follows
+                                dirs[:] = []
             else:
                 if self._parse_file(file, data):
                     matched_files += [file.name]
@@ -1676,8 +1702,10 @@ class GrepArgParser:
                                      help='limit files to those matching GLOB')
         output_ctrl_grp.add_argument('--exclude', type=str, nargs='+', metavar='GLOB', action='append', default=[],
                                      help='skip files that match GLOB')
-        # output_ctrl_grp.add_argument('--exclude-from', type=str, metavar='FILE', help='skip files that match any file pattern from FILE')
-        # output_ctrl_grp.add_argument('--exclude-dir', type=str, metavar='GLOB', help='skip directories that match GLOB')
+        output_ctrl_grp.add_argument('--exclude-from', type=str, nargs='+', metavar='FILE', action='append', default=[],
+                                     help='read FILE for exclude globs file name globs')
+        output_ctrl_grp.add_argument('--exclude-dir', type=str, nargs='+', metavar='GLOB', action='append', default=[],
+                                     help='skip directories that match GLOB')
         output_ctrl_grp.add_argument('-L', '--files-without-match', action='store_true', help='print only names of FILEs with no selected lines')
         output_ctrl_grp.add_argument('-l', '--files-with-matches', action='store_true', help='print only names of FILEs with selected lines')
         output_ctrl_grp.add_argument('-c', '--count', action='store_true', help='print only a count of selected lines per FILE')
@@ -1739,11 +1767,12 @@ class GrepArgParser:
             expressions.extend(_parse_expressions(args.expressions_positional))
 
         if args.expressions_file is not None:
-            if not os.path.isfile(args.expressions_file):
-                print('Error: {} is not a file'.format(args.expressions_file), file=sys.stderr)
-                return False
-            with open(args.expressions_file, 'r') as fp:
-                expressions.extend(_parse_expressions(fp.read()))
+            try:
+                with open(args.expressions_file, 'r') as fp:
+                    expressions.extend(_parse_expressions(fp.read()))
+            except EnvironmentError as ex:
+                if not self._no_messages:
+                    print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
 
         if not expressions:
             self._parser.print_usage()
@@ -1854,6 +1883,23 @@ class GrepArgParser:
 
         for exclude_glob in args.exclude:
             grep_object.add_file_exclude_globs(exclude_glob)
+
+        for exclude_files in args.exclude_from:
+            for exclude_file in exclude_files:
+                try:
+                    with open(exclude_file, 'r') as fp:
+                        for line in fp.readlines():
+                            if line.endswith('\n'):
+                                line = line[:-1]
+                            if line.endswith('\r'):
+                                line = line[:-1]
+                            grep_object.add_file_exclude_globs(line)
+                except EnvironmentError as ex:
+                    if not self._no_messages:
+                        print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
+
+        for exclude_glob in args.exclude_dir:
+            grep_object.add_dir_exclude_globs(exclude_glob)
 
         return True
 
