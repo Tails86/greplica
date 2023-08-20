@@ -405,7 +405,10 @@ class AnsiString:
         if val is None:
             return default
         elif val < 0:
-            return len(self._s) + val
+            ret_val = len(self._s) + val
+            if ret_val < 0:
+                ret_val = 0
+            return ret_val
         else:
             return val
 
@@ -605,6 +608,10 @@ class Grep:
         self._results_sep = ':'
         self._name_num_sep = ':'
         self._name_byte_sep = ':'
+        self._context_sep = '--\n'
+        self._context_results_sep = '-'
+        self._context_name_num_sep = '-'
+        self._context_name_byte_sep = '-'
         self._color_output_mode = __class__.ColorOutputMode.AUTO
         self._directory_handling_type = __class__.Directory.READ
         self._label = '(standard input)'
@@ -612,6 +619,8 @@ class Grep:
         self._only_matching = False
         self._binary_parse_function = __class__.BinaryParseFunction.PRINT_ERROR
         self._strip_cr = True
+        self._before_context_count = 0
+        self._after_context_count = 0
 
     def add_expression(self, expression_or_expressions):
         '''
@@ -837,6 +846,59 @@ class Grep:
         self._name_byte_sep = name_byte_sep
 
     @property
+    def context_sep(self):
+        '''
+        String: the string printed between each context group
+        '''
+        return self._context_sep
+
+    @context_sep.setter
+    def context_sep(self, context_sep):
+        if not isinstance(context_sep, str):
+            raise TypeError('Invalid type ({}) for context_sep'.format(type(context_sep)))
+        self._context_sep = context_sep
+
+    @property
+    def context_results_sep(self):
+        '''
+        String: the string printed after header information and before context line contents
+        '''
+        return self._context_results_sep
+
+    @context_results_sep.setter
+    def context_results_sep(self, context_results_sep):
+        if not isinstance(context_results_sep, str):
+            raise TypeError('Invalid type ({}) for context_results_sep'.format(type(context_results_sep)))
+        self._context_results_sep = context_results_sep
+
+    @property
+    def context_name_num_sep(self):
+        '''
+        String: the string printed before context line number if both file name and line number are printed
+        '''
+        return self._context_name_num_sep
+
+    @context_name_num_sep.setter
+    def context_name_num_sep(self, context_name_num_sep):
+        if not isinstance(context_name_num_sep, str):
+            raise TypeError('Invalid type ({}) for context_name_num_sep'.format(type(context_name_num_sep)))
+        self._name_num_sep = context_name_num_sep
+
+    @property
+    def context_name_byte_sep(self):
+        '''
+        String: the string printed before context byte offset value if byte offset as well as either
+        file name or line number is printed.
+        '''
+        return self._context_name_byte_sep
+
+    @context_name_byte_sep.setter
+    def context_name_byte_sep(self, context_name_byte_sep):
+        if not isinstance(context_name_byte_sep, str):
+            raise TypeError('Invalid type ({}) for context_name_byte_sep'.format(type(context_name_byte_sep)))
+        self._name_byte_sep = context_name_byte_sep
+
+    @property
     def color_output_mode(self):
         '''
         Grep.ColorOutputMode: sets when ANSI escape codes are printed
@@ -910,6 +972,28 @@ class Grep:
     def strip_cr(self, strip_cr):
         self._strip_cr = strip_cr
 
+    @property
+    def before_context_count(self):
+        '''
+        Integer: number of lines of context to print before a match
+        '''
+        return self._before_context_count
+
+    @before_context_count.setter
+    def before_context_count(self, before_context_count):
+        self._before_context_count = before_context_count
+
+    @property
+    def after_context_count(self):
+        '''
+        Integer: number of lines of context to print after a match
+        '''
+        return self._after_context_count
+
+    @after_context_count.setter
+    def after_context_count(self, after_context_count):
+        self._after_context_count = after_context_count
+
     @staticmethod
     def _generate_color_dict():
         grep_color_dict = dict(DEFAULT_GREP_ANSI_COLORS)
@@ -942,6 +1026,8 @@ class Grep:
         def __init__(self):
             self.files = []
             self.line_format = ''
+            self.context_sep = ''
+            self.context_line_format = ''
             self.expressions = []
             self.line_ending = b'\n'
             self.ignore_case = False
@@ -952,6 +1038,7 @@ class Grep:
             self.file_iter = None
             self.line_data_dict = {}
             self.line = b''
+            self.line_printed = False
             self.line_len = 0
             self.formatted_line = None
             self.line_slices = []
@@ -963,6 +1050,11 @@ class Grep:
             self.print_fn = None
             self.binary_parse_function = Grep.BinaryParseFunction.PRINT_ERROR
             self.strip_cr = True
+            self.before_context_count = 0
+            self.current_before_byte_offsets = []
+            self.current_before_context = []
+            self.after_context_count = 0
+            self.current_after_context_counter = 0
 
         def set_file(self, file):
             '''
@@ -987,8 +1079,15 @@ class Grep:
             Grabs the next line from the file and formats the line as necessary.
             Returns: True if line has been read or False if end of file reached.
             '''
+            if self.line_num > 0 and not self.line_printed:
+                # Save before context
+                self.current_before_context += [self.formatted_line]
+                self.current_before_byte_offsets += [self.byte_offset]
+                self.current_before_context = self.current_before_context[-self.before_context_count:]
+                self.current_before_byte_offsets = self.current_before_byte_offsets[-self.before_context_count:]
             self.byte_offset += self.line_len
             self.line_num += 1
+            self.line_printed = False
             try:
                 self.line = next(self.file_iter)
             except StopIteration:
@@ -1049,30 +1148,104 @@ class Grep:
 
             return True
 
-        def match_found(self):
-            '''
-            Called when match is found in order to increment match count and print the line.
-            '''
-            self.num_matches += 1
-            if not self.binary_detected:
-                if not self.line_slices:
-                    # Default to printing the entire line
-                    self.line_slices = [slice(0, None)]
+        def _print_line(self, line_format, formatted_line, line_num, byte_offset, line_slices=[]):
+            if not line_slices:
+                # Default to printing the entire line
+                line_slices = [slice(0, None)]
 
-                for line_slice in self.line_slices:
-                    if line_slice.start is not None:
-                        slice_byte_offset = line_slice.start
-                    else:
-                        slice_byte_offset = 0
-                    self.line_data_dict.update({
-                        'num': AnsiString(str(self.line_num)),
-                        'byte_offset': AnsiString(str(self.byte_offset + slice_byte_offset)),
-                        'line': self.formatted_line[line_slice]
-                    })
-                    self.print_fn(self.line_format.format(**self.line_data_dict))
+            for line_slice in line_slices:
+                if line_slice.start is not None:
+                    slice_byte_offset = line_slice.start
+                else:
+                    slice_byte_offset = 0
+                self.line_data_dict.update({
+                    'num': AnsiString(str(line_num)),
+                    'byte_offset': AnsiString(str(byte_offset + slice_byte_offset)),
+                    'line': formatted_line[line_slice]
+                })
+                self.print_fn(line_format.format(**self.line_data_dict))
+
+
+        def parse_complete(self, is_match):
+            '''
+            Called when parsing of line is complete.
+            Inputs: is_match - True iff the current line is a match
+            '''
+            if is_match:
+                self.num_matches += 1
+
+            if (
+                (is_match or  (self.current_after_context_counter > 0))
+                and not self.binary_detected
+            ):
+                # Print before context
+                if self.current_before_context:
+                    self.print_fn(self.context_sep, end='')
+                for i, before_line in enumerate(self.current_before_context):
+                    line_num = self.line_num - len(self.current_before_context) + i
+                    byte_offset = self.current_before_byte_offsets[i]
+                    self._print_line(
+                        self.context_line_format,
+                        before_line,
+                        line_num,
+                        byte_offset
+                    )
+                self.current_before_context = []
+                self.current_before_byte_offsets = []
+
+                # Print the line
+                self._print_line(
+                    self.line_format if is_match else self.context_line_format,
+                    self.formatted_line,
+                    self.line_num,
+                    self.byte_offset,
+                    self.line_slices
+                )
+
+                if is_match:
+                    self.current_after_context_counter = self.after_context_count
+                else:
+                    self.current_after_context_counter -= 1
+
+                self.line_printed = True
+            else:
+                self.current_after_context_counter = 0
 
     def _make_file_iterable(self, path):
         return AutoInputFileIterable(path, 'rb', self.end)
+
+    def _generate_line_format(self, grep_color_dict, name_num_sep, name_byte_sep, result_sep):
+        line_format = ''
+        if self._output_file_name:
+            line_format += '{filename'
+            if grep_color_dict and grep_color_dict.get('fn'):
+                line_format += ':[' + grep_color_dict['fn']
+            line_format += '}'
+            if self._output_line_numbers:
+                line_format += name_num_sep
+            elif self._output_byte_offset:
+                line_format += name_byte_sep
+            else:
+                line_format += result_sep
+
+        if self._output_line_numbers:
+            line_format += '{num'
+            if grep_color_dict and grep_color_dict.get('ln'):
+                line_format += ':[' + grep_color_dict['ln']
+            line_format += '}'
+            if self._output_byte_offset:
+                line_format += name_byte_sep
+            else:
+                line_format += result_sep
+
+        if self._output_byte_offset:
+            line_format += '{byte_offset'
+            if grep_color_dict and grep_color_dict.get('ln'):
+                line_format += ':[' + grep_color_dict['ln']
+            line_format += '}' + result_sep
+
+        line_format += '{line}'
+        return line_format
 
     def _init_line_parsing_data(self):
         '''
@@ -1084,6 +1257,12 @@ class Grep:
         data.line_ending = self._end
         data.binary_parse_function = self._binary_parse_function
         data.strip_cr = self._strip_cr
+
+        # Only apply context values if only_matching is not set
+        if not self._only_matching:
+            data.before_context_count = self._before_context_count
+            data.after_context_count = self._after_context_count
+
         if self._color_output_mode == Grep.ColorOutputMode.ALWAYS:
             data.color_enabled = True
         elif self._color_output_mode == Grep.ColorOutputMode.AUTO:
@@ -1093,6 +1272,7 @@ class Grep:
                 data.color_enabled = False
         else:
             data.color_enabled = False
+
         if not self._files:
             if (
                 self.directory_handling_type == __class__.Directory.RECURSE
@@ -1114,16 +1294,8 @@ class Grep:
                 else:
                     data.matching_color = grep_color_dict['ms']
         else:
+            grep_color_dict = None
             data.matching_color = None
-
-        if data.color_enabled and grep_color_dict['se']:
-            name_num_sep = str(AnsiString(self._name_num_sep, grep_color_dict['se']))
-            name_byte_sep = str(AnsiString(self._name_byte_sep, grep_color_dict['se']))
-            result_sep = str(AnsiString(self._results_sep, grep_color_dict['se']))
-        else:
-            name_num_sep = self._name_num_sep
-            name_byte_sep = self._name_byte_sep
-            result_sep = self._results_sep
 
         data.expressions = self._expressions
 
@@ -1154,43 +1326,40 @@ class Grep:
         else:
             data.fixed_string_parse = (self._search_type == __class__.SearchType.FIXED_STRINGS)
 
-        data.line_format = ''
-
-        if self._output_file_name:
-            data.line_format += '{filename'
-            if data.color_enabled and grep_color_dict['fn']:
-                data.line_format += ':[' + grep_color_dict['fn']
-            data.line_format += '}'
-            if self._output_line_numbers:
-                data.line_format += name_num_sep
-            elif self._output_byte_offset:
-                data.line_format += name_byte_sep
-            else:
-                data.line_format += result_sep
-
-        if self._output_line_numbers:
-            data.line_format += '{num'
-            if data.color_enabled and grep_color_dict['ln']:
-                data.line_format += ':[' + grep_color_dict['ln']
-            data.line_format += '}'
-            if self._output_byte_offset:
-                data.line_format += name_byte_sep
-            else:
-                data.line_format += result_sep
-
-        if self._output_byte_offset:
-            data.line_format += '{byte_offset'
-            if data.color_enabled and grep_color_dict['ln']:
-                data.line_format += ':[' + grep_color_dict['ln']
-            data.line_format += '}' + result_sep
-
-        data.line_format += '{line}'
+        if data.color_enabled and grep_color_dict['se']:
+            data.line_format = self._generate_line_format(
+                grep_color_dict,
+                str(AnsiString(self._name_num_sep, grep_color_dict['se'])),
+                str(AnsiString(self._name_byte_sep, grep_color_dict['se'])),
+                str(AnsiString(self._results_sep, grep_color_dict['se']))
+            )
+            data.context_line_format = self._generate_line_format(
+                grep_color_dict,
+                str(AnsiString(self._context_name_num_sep, grep_color_dict['se'])),
+                str(AnsiString(self._context_name_byte_sep, grep_color_dict['se'])),
+                str(AnsiString(self._context_results_sep, grep_color_dict['se']))
+            )
+            data.context_sep = str(AnsiString(self._context_sep, grep_color_dict['se']))
+        else:
+            data.line_format = self._generate_line_format(
+                grep_color_dict,
+                self._name_num_sep,
+                self._name_byte_sep,
+                self._results_sep
+            )
+            data.context_line_format = self._generate_line_format(
+                grep_color_dict,
+                self._context_name_num_sep,
+                self._context_name_byte_sep,
+                self._context_results_sep
+            )
+            data.context_sep = self._context_sep
 
         if not self._quiet:
-            data.print_fn = lambda line : print(line, file=self._print_file, flush=self._line_buffered)
+            data.print_fn = lambda line, end=None : print(line, file=self._print_file, flush=self._line_buffered, end=end)
         else:
             # Do nothing on print
-            data.print_fn = lambda line: None
+            data.print_fn = lambda line, end=None: None
 
         return data
 
@@ -1198,13 +1367,13 @@ class Grep:
         '''
         Parses a line from a file, formats line, and prints the line if match is found.
         '''
-        print_line = False
+        match_found = False
         for expression in data.expressions:
             if data.fixed_string_parse:
                 loc = data.line.find(expression)
                 if loc >= 0:
-                    print_line = not self._invert_match
-                    if print_line and (data.color_enabled or self.only_matching):
+                    match_found = not self._invert_match
+                    if match_found and (data.color_enabled or self.only_matching):
                         while loc >= 0:
                             if data.color_enabled:
                                 data.formatted_line.apply_formatting(
@@ -1214,7 +1383,7 @@ class Grep:
                             loc = data.line.find(expression, loc + len(expression))
                 elif self._invert_match:
                     # Color setting is ignored in this case - just print it
-                    print_line = True
+                    match_found = True
             else:
                 # Regular expression matching
                 flags = 0
@@ -1223,7 +1392,7 @@ class Grep:
                 if self._line_regexp:
                     m = re.fullmatch(expression, data.line, flags)
                     if m is not None:
-                        print_line = not self._invert_match
+                        match_found = not self._invert_match
                         if data.color_enabled:
                             # This is going to just format the whole line
                             data.formatted_line.apply_formatting_for_match(data.matching_color, m)
@@ -1231,22 +1400,21 @@ class Grep:
                             data.line_slices.append(slice(m.start(0), m.end(0)))
                     elif self._invert_match:
                         # Color setting is ignored in this case - just print it
-                        print_line = True
+                        match_found = True
                 else:
                     line_matches = False
                     for m in re.finditer(expression, data.line, flags):
                         line_matches = True
-                        print_line = not self._invert_match
+                        match_found = not self._invert_match
                         if data.color_enabled:
                             data.formatted_line.apply_formatting_for_match(data.matching_color, m)
                         if self.only_matching:
                             data.line_slices.append(slice(m.start(0), m.end(0)))
                     if self._invert_match and not line_matches:
                         # Color setting is ignored in this case - just print it
-                        print_line = True
-        if print_line:
-            data.match_found()
-        return print_line
+                        match_found = True
+        data.parse_complete(match_found)
+        return match_found
 
     def _parse_file(self, file, data):
         match_found = False
@@ -1382,11 +1550,22 @@ class GrepArgParser:
                                     help='String to place between file name and line number when both are enabled')
         output_ctrl_grp.add_argument('--name-byte-sep', type=str, metavar='SEP', default=':',
                                     help='String to place between file name and byte number when both are enabled')
+        output_ctrl_grp.add_argument('--context-group-sep', type=str, metavar='SEP', default='--\n',
+                                    help='String to print between context groups')
+        output_ctrl_grp.add_argument('--context-result-sep', type=str, metavar='SEP', default='-',
+                                    help='String to place between header info and context line')
+        output_ctrl_grp.add_argument('--context-name-num-sep', type=str, metavar='SEP', default='-',
+                                    help='String to place between file name and line number on context line')
+        output_ctrl_grp.add_argument('--context-name-byte-sep', type=str, metavar='SEP', default='-',
+                                    help='String to place between file name and byte number on context line')
 
         context_ctrl_grp = self._parser.add_argument_group('Context Control')
-        # context_ctrl_grp.add_argument('-B, --before-context=NUM', action='store_true', help='print NUM lines of leading context')
-        # context_ctrl_grp.add_argument('-A, --after-context=NUM', action='store_true', help='print NUM lines of trailing context')
-        # context_ctrl_grp.add_argument('-C, --context=NUM', action='store_true', help='print NUM lines of output context')
+        context_ctrl_grp.add_argument('-B', '--before-context', type=int, default=None, metavar='NUM',
+                                      help='print NUM lines of leading context')
+        context_ctrl_grp.add_argument('-A', '--after-context', type=int, default=None, metavar='NUM',
+                                      help='print NUM lines of trailing context')
+        context_ctrl_grp.add_argument('-C', '--context', type=int, default=None, metavar='NUM',
+                                      help='print NUM lines of output context')
         context_ctrl_grp.add_argument('--color', '--colour', type=str, metavar='WHEN', nargs='?', default='auto', dest='color',
                                     choices=['always', 'never', 'auto'],
                                     help='use ANSI escape codes to highlight the matching strings;\n'
@@ -1457,6 +1636,14 @@ class GrepArgParser:
         grep_object.quiet = args.quiet
         grep_object.only_matching = args.only_matching
         grep_object.strip_cr = not args.binary
+        if args.context is not None:
+            grep_object.before_context_count = args.context
+            grep_object.after_context_count = args.context
+        else:
+            if args.before_context is not None:
+                grep_object.before_context_count = args.before_context
+            if args.after_context is not None:
+                grep_object.after_context_count = args.after_context
 
         if args.recursive or args.directories == 'recurse':
             grep_object.directory_handling_type = Grep.Directory.RECURSE
@@ -1483,6 +1670,13 @@ class GrepArgParser:
             grep_object.results_sep += '\0'
         grep_object.name_num_sep = bytes(args.name_num_sep, "utf-8").decode("unicode_escape")
         grep_object.name_byte_sep = bytes(args.name_byte_sep, "utf-8").decode("unicode_escape")
+
+        grep_object.context_sep = bytes(args.context_group_sep, "utf-8").decode("unicode_escape")
+        grep_object.context_results_sep = bytes(args.context_result_sep, "utf-8").decode("unicode_escape")
+        if args.null:
+            grep_object.context_results_sep += '\0'
+        grep_object.context_name_num_sep = bytes(args.context_name_num_sep, "utf-8").decode("unicode_escape")
+        grep_object.context_name_byte_sep = bytes(args.context_name_byte_sep, "utf-8").decode("unicode_escape")
 
         if args.color == 'always':
             grep_object.color_output_mode = Grep.ColorOutputMode.ALWAYS
