@@ -568,6 +568,7 @@ class Grep:
     class Directory(Enum):
         READ = enum.auto()
         RECURSE = enum.auto()
+        RECURSE_LINKS = enum.auto()
         SKIP = enum.auto()
 
     class BinaryParseFunction(Enum):
@@ -1093,7 +1094,10 @@ class Grep:
         else:
             data.color_enabled = False
         if not self._files:
-            if self.directory_handling_type == __class__.Directory.RECURSE:
+            if (
+                self.directory_handling_type == __class__.Directory.RECURSE
+                or self.directory_handling_type == __class__.Directory.RECURSE_LINKS
+            ):
                 data.files = [self._make_file_iterable('.')]
             else:
                 data.files = [StdinIterable(True, self.end, self._label)]
@@ -1277,8 +1281,12 @@ class Grep:
             if os.path.isdir(file.name):
                 if self._directory_handling_type == __class__.Directory.READ:
                     print('{}: {}: Is a directory'.format(THIS_FILE_NAME, file.name))
-                elif self._directory_handling_type == __class__.Directory.RECURSE:
-                    for root, _, recurse_files in os.walk(file.name):
+                elif (
+                    self._directory_handling_type == __class__.Directory.RECURSE
+                    or self._directory_handling_type == __class__.Directory.RECURSE_LINKS
+                ):
+                    followlinks = (self._directory_handling_type == __class__.Directory.RECURSE_LINKS)
+                    for root, _, recurse_files in os.walk(file.name, followlinks=followlinks):
                         for recurse_file in recurse_files:
                             file_path = os.path.join(root, recurse_file)
                             if self._parse_file(self._make_file_iterable(file_path), data):
@@ -1354,11 +1362,11 @@ class GrepArgParser:
         output_ctrl_grp.add_argument('-I', dest='binary_without_match', action='store_true',
                                      help='same as --binary-files=without-match')
         output_ctrl_grp.add_argument('-d', '--directories', type=str, metavar='ACTION', default='read',
-                                     choices=['read', 'recurse', 'skip'],
+                                     choices=['read', 'recurse', 'skip', 'recurse_links'],
                                      help='controls how directory input is handled in FILE;\n'
                                      'ACTION is \'read\', \'recurse\', or \'skip\'')
         output_ctrl_grp.add_argument('-r', '--recursive', action='store_true', help='same as --directories=recurse')
-        # output_ctrl_grp.add_argument('-R', '--dereference-recursive', action='store_true', help='likewise, but follow all symlinks')
+        output_ctrl_grp.add_argument('-R', '--dereference-recursive', action='store_true', help='same as --directories=recurse_links')
         # output_ctrl_grp.add_argument('--include', type=str, metavar='GLOB', help='limit files to those matching GLOB')
         # output_ctrl_grp.add_argument('--exclude', type=str, metavar='GLOB', help='skip files that match GLOB')
         # output_ctrl_grp.add_argument('--exclude-from', type=str, metavar='FILE', help='skip files that match any file pattern from FILE')
@@ -1367,7 +1375,7 @@ class GrepArgParser:
         # output_ctrl_grp.add_argument('-l', '--files-with-matches', action='store_true', help='print only names of FILEs with selected lines')
         # output_ctrl_grp.add_argument('-c', '--count', action='store_true', help='print only a count of selected lines per FILE')
         # output_ctrl_grp.add_argument('-T', '--initial-tab', action='store_true', help='make tabs line up (if needed)')
-        # output_ctrl_grp.add_argument('-Z', '--null', action='store_true', help='print 0 byte after FILE name')
+        output_ctrl_grp.add_argument('-Z', '--null', action='store_true', help='adds 0 to the end of result-sep')
         output_ctrl_grp.add_argument('--result-sep', type=str, metavar='SEP', default=':',
                                     help='String to place between header info and and search output')
         output_ctrl_grp.add_argument('--name-num-sep', type=str, metavar='SEP', default=':',
@@ -1455,6 +1463,11 @@ class GrepArgParser:
             if not args.no_filename:
                 # Force output of file name
                 grep_object.output_file_name = True
+        elif args.deference_recursive or args.directories == 'recurse_links':
+            grep_object.directory_handling_type = Grep.Directory.RECURSE_LINKS
+            if not args.no_filename:
+                # Force output of file name
+                grep_object.output_file_name = True
         elif args.directories == 'skip':
             grep_object.directory_handling_type = Grep.Directory.SKIP
         else:
@@ -1466,6 +1479,8 @@ class GrepArgParser:
             grep_object.end = bytes(args.end, "utf-8").decode("unicode_escape")
 
         grep_object.results_sep = args.result_sep
+        if args.null:
+            grep_object.results_sep += '\0'
         grep_object.name_num_sep = args.name_num_sep
         grep_object.name_byte_sep = args.name_byte_sep
 
