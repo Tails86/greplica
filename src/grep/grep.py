@@ -28,6 +28,7 @@ import argparse
 from enum import Enum
 import enum
 import re
+import fnmatch
 
 __version__ = '0.9.1'
 THIS_FILE_NAME = os.path.basename(__file__)
@@ -496,6 +497,7 @@ class AnsiString:
 
             __class__._insert_settings_to_dict(settings_dict, 0, True, format_settings)
 
+        clear_needed = False
         for idx, settings, current_settings in __class__.SettingsIterator(settings_dict):
             if idx >= len(self._s):
                 # Invalid
@@ -511,10 +513,12 @@ class AnsiString:
                 settings_to_apply = [AnsiFormat.RESET.value] + settings_to_apply
             # Apply these settings
             out_str += __class__.ANSI_ESCAPE_FORMAT.format(';'.join(settings_to_apply))
+            # Save this flag in case this is the last loop
+            clear_needed = bool(current_settings)
 
         # Final catch up
         out_str += self._s[last_idx:]
-        if current_settings:
+        if clear_needed:
             # Clear settings
             out_str += __class__.ANSI_ESCAPE_CLEAR
 
@@ -593,6 +597,8 @@ class Grep:
         '''
         self._expressions = []
         self._files = []
+        self._file_include_globs = []
+        self._file_exclude_globs = []
         self._search_type = __class__.SearchType.BASIC_REGEXP
         self._ignore_case = False
         self._word_regexp = False
@@ -638,6 +644,13 @@ class Grep:
             raise TypeError('Invalid type ({}) for expression_or_expressions'
                             .format(type(expression_or_expressions)))
 
+    def add_expressions(self, expression_or_expressions):
+        '''
+        Adds a single expression or list of expressions that Grep will search for in selected files.
+        Inputs: expression_or_expressions - must be of type list or str
+        '''
+        self.add_expression(expression_or_expressions)
+
     def clear_expressions(self):
         '''
         Clears all expressions that were previously set by add_expression().
@@ -662,6 +675,28 @@ class Grep:
         Clear all files that were previously set by add_files().
         '''
         self._files = []
+
+    def add_file_include_globs(self, glob_or_globs):
+        if isinstance(glob_or_globs, list):
+            self._file_include_globs.extend(glob_or_globs)
+        elif isinstance(glob_or_globs, str):
+            self._file_include_globs.append(glob_or_globs)
+        else:
+            raise TypeError('Invalid type ({}) for glob_or_globs'.format(type(glob_or_globs)))
+
+    def clear_file_include_globs(self):
+        self._file_include_globs = []
+
+    def add_file_exclude_globs(self, glob_or_globs):
+        if isinstance(glob_or_globs, list):
+            self._file_exclude_globs.extend(glob_or_globs)
+        elif isinstance(glob_or_globs, str):
+            self._file_exclude_globs.append(glob_or_globs)
+        else:
+            raise TypeError('Invalid type ({}) for glob_or_globs'.format(type(glob_or_globs)))
+
+    def clear_file_exclude_globs(self):
+        self._file_exclude_globs = []
 
     @property
     def search_type(self):
@@ -1478,7 +1513,28 @@ class Grep:
         return match_found
 
     def _parse_file(self, file, data):
+        file_base_name = os.path.basename(file.name)
+
+        included = False
+        for g in self._file_include_globs:
+            if fnmatch.fnmatch(file_base_name, g):
+                included = True
+                break
+        if not self._file_include_globs:
+            # Default to include all when no globs provided
+            included = True
+
+        excluded = False
+        for g in self._file_exclude_globs:
+            if fnmatch.fnmatch(file_base_name, g):
+                excluded = True
+                break
+
+        if not included or excluded:
+            return False
+
         match_found = False
+
         try:
             data.set_file(file)
         except EnvironmentError as ex:
@@ -1616,8 +1672,10 @@ class GrepArgParser:
                                      'ACTION is \'read\', \'recurse\', or \'skip\'')
         output_ctrl_grp.add_argument('-r', '--recursive', action='store_true', help='same as --directories=recurse')
         output_ctrl_grp.add_argument('-R', '--dereference-recursive', action='store_true', help='same as --directories=recurse_links')
-        # output_ctrl_grp.add_argument('--include', type=str, metavar='GLOB', help='limit files to those matching GLOB')
-        # output_ctrl_grp.add_argument('--exclude', type=str, metavar='GLOB', help='skip files that match GLOB')
+        output_ctrl_grp.add_argument('--include', type=str, nargs='+', metavar='GLOB', action='append', default=[],
+                                     help='limit files to those matching GLOB')
+        output_ctrl_grp.add_argument('--exclude', type=str, nargs='+', metavar='GLOB', action='append', default=[],
+                                     help='skip files that match GLOB')
         # output_ctrl_grp.add_argument('--exclude-from', type=str, metavar='FILE', help='skip files that match any file pattern from FILE')
         # output_ctrl_grp.add_argument('--exclude-dir', type=str, metavar='GLOB', help='skip directories that match GLOB')
         output_ctrl_grp.add_argument('-L', '--files-without-match', action='store_true', help='print only names of FILEs with no selected lines')
@@ -1790,6 +1848,12 @@ class GrepArgParser:
             grep_object.binary_parse_function = Grep.BinaryParseFunction.SKIP
         else:
             grep_object.binary_parse_function = Grep.BinaryParseFunction.PRINT_ERROR
+
+        for include_glob in args.include:
+            grep_object.add_file_include_globs(include_glob)
+
+        for exclude_glob in args.exclude:
+            grep_object.add_file_exclude_globs(exclude_glob)
 
         return True
 
