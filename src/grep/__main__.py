@@ -1,5 +1,5 @@
 import sys
-from . import main as grep_main
+from .grep import main as grep_main
 
 def main():
     ''' Grep main using arguments from sys.argv '''
