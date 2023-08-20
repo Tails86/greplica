@@ -621,6 +621,7 @@ class Grep:
         self._strip_cr = True
         self._before_context_count = 0
         self._after_context_count = 0
+        self._print_count_only = False
 
     def add_expression(self, expression_or_expressions):
         '''
@@ -994,6 +995,17 @@ class Grep:
     def after_context_count(self, after_context_count):
         self._after_context_count = after_context_count
 
+    @property
+    def print_count_only(self):
+        '''
+        Boolean: when true, only count of number of matches is printed
+        '''
+        return self._print_count_only
+
+    @print_count_only.setter
+    def print_count_only(self, print_count_only):
+        self._print_count_only = print_count_only
+
     @staticmethod
     def _generate_color_dict():
         grep_color_dict = dict(DEFAULT_GREP_ANSI_COLORS)
@@ -1060,6 +1072,9 @@ class Grep:
             '''
             Prints any errors detected of previous file and sets the file currently being parsed
             '''
+            self.current_before_byte_offsets = []
+            self.current_before_context = []
+            self.current_after_context_counter = 0
             self.binary_detected = False
             self.line_num = 0
             self.num_matches = 0
@@ -1079,7 +1094,7 @@ class Grep:
             Grabs the next line from the file and formats the line as necessary.
             Returns: True if line has been read or False if end of file reached.
             '''
-            if self.line_num > 0 and not self.line_printed:
+            if self.line_num > 0 and not self.line_printed and self.before_context_count > 0:
                 # Save before context
                 self.current_before_context += [self.formatted_line]
                 self.current_before_byte_offsets += [self.byte_offset]
@@ -1216,29 +1231,33 @@ class Grep:
 
     def _generate_line_format(self, grep_color_dict, name_num_sep, name_byte_sep, result_sep):
         line_format = ''
-        if self._output_file_name:
+        output_file_name = (self._output_file_name or self._print_count_only)
+        output_line_numbers = (self._output_line_numbers and not self._print_count_only)
+        output_byte_offset = (self._output_byte_offset and not self._print_count_only)
+
+        if output_file_name:
             line_format += '{filename'
             if grep_color_dict and grep_color_dict.get('fn'):
                 line_format += ':[' + grep_color_dict['fn']
             line_format += '}'
-            if self._output_line_numbers:
+            if output_line_numbers:
                 line_format += name_num_sep
-            elif self._output_byte_offset:
+            elif output_byte_offset:
                 line_format += name_byte_sep
             else:
                 line_format += result_sep
 
-        if self._output_line_numbers:
+        if output_line_numbers:
             line_format += '{num'
             if grep_color_dict and grep_color_dict.get('ln'):
                 line_format += ':[' + grep_color_dict['ln']
             line_format += '}'
-            if self._output_byte_offset:
+            if output_byte_offset:
                 line_format += name_byte_sep
             else:
                 line_format += result_sep
 
-        if self._output_byte_offset:
+        if output_byte_offset:
             line_format += '{byte_offset'
             if grep_color_dict and grep_color_dict.get('ln'):
                 line_format += ':[' + grep_color_dict['ln']
@@ -1355,11 +1374,15 @@ class Grep:
             )
             data.context_sep = self._context_sep
 
-        if not self._quiet:
+        if not self._quiet and not self._print_count_only:
             data.print_fn = lambda line, end=None : print(line, file=self._print_file, flush=self._line_buffered, end=end)
         else:
             # Do nothing on print
             data.print_fn = lambda line, end=None: None
+
+        if self._print_count_only:
+            # Force binary mode to ignore decode errors so it continues to count
+            self.binary_parse_function = __class__.BinaryParseFunction.IGNORE_DECODE_ERRORS
 
         return data
 
@@ -1429,6 +1452,17 @@ class Grep:
                 while data.next_line() and (self._max_count is None or data.num_matches < self._max_count):
                     if self._parse_line(data):
                         match_found = True
+                if self._print_count_only:
+                    data.line_data_dict.update({
+                        'num': AnsiString(''),
+                        'byte_offset': AnsiString(''),
+                        'line': data.num_matches
+                    })
+                    print(
+                        data.line_format.format(**data.line_data_dict),
+                        file=self._print_file,
+                        flush=self._line_buffered
+                    )
             except BinaryDetectedException:
                 pass # Skip the rest of the file and continue
         return match_found
@@ -1541,8 +1575,10 @@ class GrepArgParser:
         # output_ctrl_grp.add_argument('--exclude-dir', type=str, metavar='GLOB', help='skip directories that match GLOB')
         # output_ctrl_grp.add_argument('-L', '--files-without-match', action='store_true', help='print only names of FILEs with no selected lines')
         # output_ctrl_grp.add_argument('-l', '--files-with-matches', action='store_true', help='print only names of FILEs with selected lines')
-        # output_ctrl_grp.add_argument('-c', '--count', action='store_true', help='print only a count of selected lines per FILE')
-        # output_ctrl_grp.add_argument('-T', '--initial-tab', action='store_true', help='make tabs line up (if needed)')
+        output_ctrl_grp.add_argument('-c', '--count', action='store_true', help='print only a count of selected lines per FILE')
+        # TODO: fix the below feature
+        output_ctrl_grp.add_argument('-T', '--initial-tab', action='store_true',
+                                     help='currently just adds tabs to each sep value (will make better later)')
         output_ctrl_grp.add_argument('-Z', '--null', action='store_true', help='adds 0 to the end of result-sep')
         output_ctrl_grp.add_argument('--result-sep', type=str, metavar='SEP', default=':',
                                     help='String to place between header info and and search output')
@@ -1636,6 +1672,8 @@ class GrepArgParser:
         grep_object.quiet = args.quiet
         grep_object.only_matching = args.only_matching
         grep_object.strip_cr = not args.binary
+        grep_object.print_count_only = args.count
+
         if args.context is not None:
             grep_object.before_context_count = args.context
             grep_object.after_context_count = args.context
@@ -1666,17 +1704,29 @@ class GrepArgParser:
             grep_object.end = bytes(args.end, "utf-8").decode("unicode_escape")
 
         grep_object.results_sep = bytes(args.result_sep, "utf-8").decode("unicode_escape")
+        if args.initial_tab:
+            grep_object.results_sep += '\t'
         if args.null:
             grep_object.results_sep += '\0'
         grep_object.name_num_sep = bytes(args.name_num_sep, "utf-8").decode("unicode_escape")
+        if args.initial_tab:
+            grep_object.name_num_sep += '\t'
         grep_object.name_byte_sep = bytes(args.name_byte_sep, "utf-8").decode("unicode_escape")
+        if args.initial_tab:
+            grep_object.name_byte_sep += '\t'
 
         grep_object.context_sep = bytes(args.context_group_sep, "utf-8").decode("unicode_escape")
         grep_object.context_results_sep = bytes(args.context_result_sep, "utf-8").decode("unicode_escape")
+        if args.initial_tab:
+            grep_object.context_results_sep += '\t'
         if args.null:
             grep_object.context_results_sep += '\0'
         grep_object.context_name_num_sep = bytes(args.context_name_num_sep, "utf-8").decode("unicode_escape")
+        if args.initial_tab:
+            grep_object.context_name_num_sep += '\t'
         grep_object.context_name_byte_sep = bytes(args.context_name_byte_sep, "utf-8").decode("unicode_escape")
+        if args.initial_tab:
+            grep_object.context_name_byte_sep += '\t'
 
         if args.color == 'always':
             grep_object.color_output_mode = Grep.ColorOutputMode.ALWAYS
