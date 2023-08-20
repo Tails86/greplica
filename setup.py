@@ -38,6 +38,6 @@ setuptools.setup(
         'dev': ['check-manifest']
     },
     entry_points={
-        'console_scripts': ['grep=grep']
+        'console_scripts': ['grep=grep.__main__:main']
     }
 )
