@@ -621,6 +621,8 @@ class Grep:
         self._strip_cr = True
         self._before_context_count = 0
         self._after_context_count = 0
+        self._print_matching_files_only = False
+        self._print_non_matching_files_only = False
         self._print_count_only = False
 
     def add_expression(self, expression_or_expressions):
@@ -996,9 +998,31 @@ class Grep:
         self._after_context_count = after_context_count
 
     @property
+    def print_matching_files_only(self):
+        '''
+        Boolean: when true, only the file name of matching files are printed
+        '''
+        return self._print_matching_files_only
+
+    @print_matching_files_only.setter
+    def print_matching_files_only(self, print_matching_files_only):
+        self._print_matching_files_only = print_matching_files_only
+
+    @property
+    def print_non_matching_files_only(self):
+        '''
+        Boolean: when true, only the file name of non-matching files are printed
+        '''
+        return self._print_non_matching_files_only
+
+    @print_non_matching_files_only.setter
+    def print_non_matching_files_only(self, print_non_matching_files_only):
+        self._print_non_matching_files_only = print_non_matching_files_only
+
+    @property
     def print_count_only(self):
         '''
-        Boolean: when true, only count of number of matches is printed
+        Boolean: when true, only count of number of matches for each file is printed
         '''
         return self._print_count_only
 
@@ -1231,9 +1255,15 @@ class Grep:
 
     def _generate_line_format(self, grep_color_dict, name_num_sep, name_byte_sep, result_sep):
         line_format = ''
-        output_file_name = (self._output_file_name or self._print_count_only)
-        output_line_numbers = (self._output_line_numbers and not self._print_count_only)
-        output_byte_offset = (self._output_byte_offset and not self._print_count_only)
+        output_file_name_only = (
+            self._print_count_only
+            or self._print_matching_files_only
+            or self._print_non_matching_files_only
+        )
+        output_file_name = (self._output_file_name or output_file_name_only)
+        output_line_numbers = (self._output_line_numbers and not output_file_name_only)
+        output_byte_offset = (self._output_byte_offset and not output_file_name_only)
+        output_line = (not self._print_matching_files_only and not self._print_non_matching_files_only)
 
         if output_file_name:
             line_format += '{filename'
@@ -1244,7 +1274,7 @@ class Grep:
                 line_format += name_num_sep
             elif output_byte_offset:
                 line_format += name_byte_sep
-            else:
+            elif output_line:
                 line_format += result_sep
 
         if output_line_numbers:
@@ -1254,16 +1284,19 @@ class Grep:
             line_format += '}'
             if output_byte_offset:
                 line_format += name_byte_sep
-            else:
+            elif output_line:
                 line_format += result_sep
 
         if output_byte_offset:
             line_format += '{byte_offset'
             if grep_color_dict and grep_color_dict.get('ln'):
                 line_format += ':[' + grep_color_dict['ln']
-            line_format += '}' + result_sep
+            line_format += '}'
+            if output_line:
+                line_format += result_sep
 
-        line_format += '{line}'
+        if output_line:
+            line_format += '{line}'
         return line_format
 
     def _init_line_parsing_data(self):
@@ -1374,7 +1407,12 @@ class Grep:
             )
             data.context_sep = self._context_sep
 
-        if not self._quiet and not self._print_count_only:
+        if (
+            not self._quiet
+            and not self._print_count_only
+            and not self._print_matching_files_only
+            and not self._print_non_matching_files_only
+        ):
             data.print_fn = lambda line, end=None : print(line, file=self._print_file, flush=self._line_buffered, end=end)
         else:
             # Do nothing on print
@@ -1452,7 +1490,16 @@ class Grep:
                 while data.next_line() and (self._max_count is None or data.num_matches < self._max_count):
                     if self._parse_line(data):
                         match_found = True
-                if self._print_count_only:
+                if (
+                    (self._print_matching_files_only and match_found)
+                    or (self._print_non_matching_files_only and not match_found)
+                ):
+                    print(
+                        data.line_format.format(**data.line_data_dict),
+                        file=self._print_file,
+                        flush=self._line_buffered
+                    )
+                elif self._print_count_only:
                     data.line_data_dict.update({
                         'num': AnsiString(''),
                         'byte_offset': AnsiString(''),
@@ -1573,8 +1620,8 @@ class GrepArgParser:
         # output_ctrl_grp.add_argument('--exclude', type=str, metavar='GLOB', help='skip files that match GLOB')
         # output_ctrl_grp.add_argument('--exclude-from', type=str, metavar='FILE', help='skip files that match any file pattern from FILE')
         # output_ctrl_grp.add_argument('--exclude-dir', type=str, metavar='GLOB', help='skip directories that match GLOB')
-        # output_ctrl_grp.add_argument('-L', '--files-without-match', action='store_true', help='print only names of FILEs with no selected lines')
-        # output_ctrl_grp.add_argument('-l', '--files-with-matches', action='store_true', help='print only names of FILEs with selected lines')
+        output_ctrl_grp.add_argument('-L', '--files-without-match', action='store_true', help='print only names of FILEs with no selected lines')
+        output_ctrl_grp.add_argument('-l', '--files-with-matches', action='store_true', help='print only names of FILEs with selected lines')
         output_ctrl_grp.add_argument('-c', '--count', action='store_true', help='print only a count of selected lines per FILE')
         # TODO: fix the below feature
         output_ctrl_grp.add_argument('-T', '--initial-tab', action='store_true',
@@ -1672,6 +1719,8 @@ class GrepArgParser:
         grep_object.quiet = args.quiet
         grep_object.only_matching = args.only_matching
         grep_object.strip_cr = not args.binary
+        grep_object.print_matching_files_only = args.files_with_matches
+        grep_object.print_non_matching_files_only = args.files_without_match
         grep_object.print_count_only = args.count
 
         if args.context is not None:
