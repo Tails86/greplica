@@ -9,22 +9,25 @@ To install, ensure you are connected to the internet and execute: `python3 -m pi
 ## CLI Help
 ```
 usage: grep.py [-E | -F | -G] [-e EXPRESSIONS] [-f FILE] [-i] [--no-ignore-case] [-w] [-x]
-               [--end END] [-z] [-s] [-v] [-V] [--help] [-m NUM] [-b] [-n] [--line-buffered] [-H]
-               [-h] [--label LABEL] [-o] [-q] [--binary-files TYPE] [-a] [-I] [-d ACTION] [-r] [-R]
-               [--include GLOB [GLOB ...]] [--exclude GLOB [GLOB ...]]
-               [--exclude-from FILE [FILE ...]] [--exclude-dir GLOB [GLOB ...]] [-L] [-l] [-c] [-T]
-               [-Z] [--result-sep SEP] [--name-num-sep SEP] [--name-byte-sep SEP]
-               [--context-group-sep SEP] [--context-result-sep SEP] [--context-name-num-sep SEP]
-               [--context-name-byte-sep SEP] [-B NUM] [-A NUM] [-C NUM] [--color [WHEN]] [-U]
+               [--end END] [-z] [-s] [-v] [-V] [--help] [-m NUM] [-b] [-n]
+               [--line-buffered] [-H] [-h] [--label LABEL] [-o] [-q] [--binary-files TYPE]
+               [-a] [-I] [-d ACTION] [-r] [-R] [--include GLOB [GLOB ...]]
+               [--exclude GLOB [GLOB ...]] [--exclude-from FILE [FILE ...]]
+               [--exclude-dir GLOB [GLOB ...]] [-L] [-l] [-c] [-T] [-Z] [--result-sep SEP]
+               [--name-num-sep SEP] [--name-byte-sep SEP] [--context-group-sep SEP]
+               [--context-result-sep SEP] [--context-name-num-sep SEP]
+               [--context-name-byte-sep SEP] [-B NUM] [-A NUM] [-C NUM] [--color [WHEN]]
+               [-U]
                [EXPRESSIONS] [FILE [FILE ...]]
 
 Reimplementation of grep command entirely in Python.
 
 positional arguments:
-  EXPRESSIONS           Expressions to search for, separated by newline character (\n). This is
-                        required if --regexp or --file are not specified.
-  FILE                  Files or directories to search. Stdin will be searched if not specified. How
-                        directories are handled is controled by -d and -r options.
+  EXPRESSIONS           Expressions to search for, separated by newline character (\n).
+                        This is required if --regexp or --file are not specified.
+  FILE                  Files or directories to search. Stdin will be searched if not
+                        specified. How directories are handled is controled by -d and -r
+                        options.
 
 Expression Interpretation:
   -E, --extended-regexp
@@ -59,12 +62,13 @@ Output control:
   -o, --only-matching   show only nonempty parts of lines that match
   -q, --quiet, --silent
                         suppress all normal output
-  --binary-files TYPE   sets how binary file is parsed; TYPE is 'binary', 'text', or 'without-match'
+  --binary-files TYPE   sets how binary file is parsed; TYPE is 'binary', 'text', or
+                        'without-match'
   -a, --text            same as --binary-files=text
   -I                    same as --binary-files=without-match
   -d ACTION, --directories ACTION
-                        controls how directory input is handled in FILE; ACTION is 'read', 'recurse',
-                        or 'skip'
+                        controls how directory input is handled in FILE; ACTION is 'read',
+                        'recurse', or 'skip'
   -r, --recursive       same as --directories=recurse
   -R, --dereference-recursive
                         same as --directories=recurse_links
@@ -84,8 +88,10 @@ Output control:
   -T, --initial-tab     currently just adds tabs to each sep value (will make better later)
   -Z, --null            adds 0 to the end of result-sep
   --result-sep SEP      String to place between header info and and search output
-  --name-num-sep SEP    String to place between file name and line number when both are enabled
-  --name-byte-sep SEP   String to place between file name and byte number when both are enabled
+  --name-num-sep SEP    String to place between file name and line number when both are
+                        enabled
+  --name-byte-sep SEP   String to place between file name and byte number when both are
+                        enabled
   --context-group-sep SEP
                         String to print between context groups
   --context-result-sep SEP
@@ -103,7 +109,7 @@ Context Control:
   -C NUM, --context NUM
                         print NUM lines of output context
   --color [WHEN], --colour [WHEN]
-                        use ANSI escape codes to highlight the matching strings; WHEN is 'always',
-                        'never', or 'auto'
+                        use ANSI escape codes to highlight the matching strings; WHEN is
+                        'always', 'never', or 'auto'
   -U, --binary          do not strip CR characters at EOL (MSDOS/Windows)
   ```
