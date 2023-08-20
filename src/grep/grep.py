@@ -1633,7 +1633,10 @@ class GrepArgParser:
     Used to parse command line arguments for Grep.
     '''
     def __init__(self):
-        self._parser = argparse.ArgumentParser(description='Partially implements grep command entirely in Python.', add_help=False)
+        self._parser = argparse.ArgumentParser(
+            prog=THIS_FILE_NAME,
+            description='Reimplementation of grep command entirely in Python.',
+            add_help=False)
         self._parser.add_argument('expressions_positional', type=str, nargs='?', default=None, metavar='EXPRESSIONS',
                             help='Expressions to search for, separated by newline character (\\n). '
                             'This is required if --regexp or --file are not specified.')
