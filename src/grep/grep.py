@@ -1478,11 +1478,11 @@ class GrepArgParser:
         else:
             grep_object.end = bytes(args.end, "utf-8").decode("unicode_escape")
 
-        grep_object.results_sep = args.result_sep
+        grep_object.results_sep = bytes(args.result_sep, "utf-8").decode("unicode_escape")
         if args.null:
             grep_object.results_sep += '\0'
-        grep_object.name_num_sep = args.name_num_sep
-        grep_object.name_byte_sep = args.name_byte_sep
+        grep_object.name_num_sep = bytes(args.name_num_sep, "utf-8").decode("unicode_escape")
+        grep_object.name_byte_sep = bytes(args.name_byte_sep, "utf-8").decode("unicode_escape")
 
         if args.color == 'always':
             grep_object.color_output_mode = Grep.ColorOutputMode.ALWAYS
