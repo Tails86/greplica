@@ -30,7 +30,7 @@ import enum
 import re
 
 __version__ = '0.9.0'
-THIS_FILE_NAME = os.path.basename(__file__)
+THIS_FILE_NAME = 'grep.py'
 
 class BinaryDetectedException(Exception):
     def __init__(self, *args: object) -> None:
