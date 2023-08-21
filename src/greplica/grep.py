@@ -1645,7 +1645,7 @@ class Grep:
                                     # Do nothing and exclude anything that follows
                                     dirs[:] = []
                 else:
-                    if self._parse_file(file, data):
+                    if self._parse_file(expanded_file, data):
                         matched_files += [expanded_file.name]
 
         return matched_files
