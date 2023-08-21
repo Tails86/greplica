@@ -1797,7 +1797,7 @@ class GrepArgParser:
                         # Need to manually expand this out
                         expanded_files = [f for f in glob.glob(file)]
                         if not expanded_files:
-                            if not self._no_messages:
+                            if not args.no_messages:
                                 print('No match for: {}'.format(file), file=sys.stderr)
                             continue
                     else:
@@ -1808,7 +1808,7 @@ class GrepArgParser:
                             with open(expressions_file, 'r') as fp:
                                 expressions.extend(_parse_expressions(fp.read()))
                         except EnvironmentError as ex:
-                            if not self._no_messages:
+                            if not args.no_messages:
                                 print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
             # The first positional (expressions_positional) is a file
             if args.expressions_positional is not None:
@@ -1933,7 +1933,7 @@ class GrepArgParser:
                     # Need to manually expand this out
                     expanded_files = [f for f in glob.glob(exclude_file)]
                     if not expanded_files:
-                        if not self._no_messages:
+                        if not args.no_messages:
                             print('No match for: {}'.format(exclude_file), file=sys.stderr)
                         continue
                 else:
@@ -1949,7 +1949,7 @@ class GrepArgParser:
                                     line = line[:-1]
                                 grep_object.add_file_exclude_globs(line)
                     except EnvironmentError as ex:
-                        if not self._no_messages:
+                        if not args.no_messages:
                             print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
 
         for exclude_glob in args.exclude_dir:
