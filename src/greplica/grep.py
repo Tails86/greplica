@@ -940,7 +940,7 @@ class Grep:
     def context_name_num_sep(self, context_name_num_sep):
         if not isinstance(context_name_num_sep, str):
             raise TypeError('Invalid type ({}) for context_name_num_sep'.format(type(context_name_num_sep)))
-        self._name_num_sep = context_name_num_sep
+        self._context_name_num_sep = context_name_num_sep
 
     @property
     def context_name_byte_sep(self):
@@ -954,7 +954,7 @@ class Grep:
     def context_name_byte_sep(self, context_name_byte_sep):
         if not isinstance(context_name_byte_sep, str):
             raise TypeError('Invalid type ({}) for context_name_byte_sep'.format(type(context_name_byte_sep)))
-        self._name_byte_sep = context_name_byte_sep
+        self._context_name_byte_sep = context_name_byte_sep
 
     @property
     def color_output_mode(self):
