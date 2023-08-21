@@ -38,6 +38,6 @@ setuptools.setup(
         'dev': ['check-manifest']
     },
     entry_points={
-        'console_scripts': ['grep=grep.__main__:main', 'greplica=grep.__main__:main']
+        'console_scripts': ['grep=greplica.__main__:main', 'greplica=greplica.__main__:main']
     }
 )
