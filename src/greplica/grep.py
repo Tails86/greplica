@@ -30,7 +30,7 @@ import enum
 import re
 import fnmatch
 
-__version__ = '0.9.7'
+__version__ = '0.9.8'
 THIS_FILE_NAME = os.path.basename(__file__)
 
 class BinaryDetectedException(Exception):
@@ -1827,7 +1827,7 @@ class GrepArgParser:
             if not args.no_filename:
                 # Force output of file name
                 grep_object.output_file_name = True
-        elif args.deference_recursive or args.directories == 'recurse_links':
+        elif args.dereference_recursive or args.directories == 'recurse_links':
             grep_object.directory_handling_type = Grep.Directory.RECURSE_LINKS
             if not args.no_filename:
                 # Force output of file name
