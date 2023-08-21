@@ -31,7 +31,7 @@ import re
 import fnmatch
 import glob
 
-__version__ = '0.9.8'
+__version__ = '0.9.9'
 THIS_FILE_NAME = os.path.basename(__file__)
 
 def _is_windows():
