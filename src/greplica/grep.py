@@ -1407,7 +1407,7 @@ class Grep:
             else:
                 data.files = [StdinIterable(True, self.end, self._label)]
         else:
-            data.files = [self._make_file_iterable(f) for f in _expand_cl_paths(self._files)]
+            data.files = [self._make_file_iterable(f) for f in _expand_cl_paths(self._files, not self._no_messages)]
 
         if data.color_enabled:
             grep_color_dict = __class__._generate_color_dict()
@@ -1799,7 +1799,7 @@ class GrepArgParser:
                 args.file.insert(0, args.expressions_positional)
         elif args.expressions_file:
             for file_group in args.expressions_file:
-                for file in _expand_cl_paths(file_group):
+                for file in _expand_cl_paths(file_group, not args.no_messages):
                     try:
                         with open(file, 'r') as fp:
                             expressions.extend(_parse_expressions(fp.read()))
@@ -1924,7 +1924,7 @@ class GrepArgParser:
             grep_object.add_file_exclude_globs(exclude_glob)
 
         for exclude_files in args.exclude_from:
-            for exclude_file in _expand_cl_paths(exclude_files):
+            for exclude_file in _expand_cl_paths(exclude_files, not args.no_messages):
                 try:
                     with open(exclude_file, 'r') as fp:
                         for line in fp.readlines():
