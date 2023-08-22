@@ -37,6 +37,21 @@ THIS_FILE_NAME = os.path.basename(__file__)
 def _is_windows():
     return sys.platform.lower().startswith('win')
 
+def _expand_cl_path(path, show_errors):
+    if _is_windows():
+        # Need to manually expand this out
+        expanded_paths = [f for f in glob.glob(path)]
+        if not expanded_paths:
+            if show_errors:
+                print('No match for: {}'.format(path), file=sys.stderr)
+    else:
+        # *nix and *nix based systems do this from command line
+        expanded_paths = [path]
+    return expanded_paths
+
+def _expand_cl_paths(paths, show_errors):
+    return [y for x in paths for y in _expand_cl_path(x, not show_errors)]
+
 class BinaryDetectedException(Exception):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
@@ -1392,7 +1407,7 @@ class Grep:
             else:
                 data.files = [StdinIterable(True, self.end, self._label)]
         else:
-            data.files = [self._make_file_iterable(f) for f in self._files]
+            data.files = [self._make_file_iterable(f) for f in _expand_cl_paths(self._files)]
 
         if data.color_enabled:
             grep_color_dict = __class__._generate_color_dict()
@@ -1618,38 +1633,27 @@ class Grep:
         matched_files = []
 
         for file in data.files:
-            if _is_windows() and isinstance(file, AutoInputFileIterable):
-                # Need to manually expand this out
-                expanded_files = [self._make_file_iterable(f) for f in glob.glob(file.name)]
-                if not expanded_files:
-                    if not self._no_messages:
-                        print('No match for: {}'.format(file.name), file=sys.stderr)
-                    continue
+            if os.path.isdir(file.name):
+                if not self._is_excluded_dir(file.name):
+                    if self._directory_handling_type == __class__.Directory.READ:
+                        print('{}: {}: Is a directory'.format(THIS_FILE_NAME, file.name))
+                    elif (
+                        self._directory_handling_type == __class__.Directory.RECURSE
+                        or self._directory_handling_type == __class__.Directory.RECURSE_LINKS
+                    ):
+                        followlinks = (self._directory_handling_type == __class__.Directory.RECURSE_LINKS)
+                        for root, dirs, recurse_files in os.walk(file.name, followlinks=followlinks):
+                            if not self._is_excluded_dir(root):
+                                for recurse_file in recurse_files:
+                                    file_path = os.path.join(root, recurse_file)
+                                    if self._parse_file(self._make_file_iterable(file_path), data):
+                                        matched_files += [file_path]
+                            else:
+                                # Do nothing and exclude anything that follows
+                                dirs[:] = []
             else:
-                # *nix and *nix based systems do this from command line
-                expanded_files = [file]
-            for expanded_file in expanded_files:
-                if os.path.isdir(expanded_file.name):
-                    if not self._is_excluded_dir(expanded_file.name):
-                        if self._directory_handling_type == __class__.Directory.READ:
-                            print('{}: {}: Is a directory'.format(THIS_FILE_NAME, expanded_file.name))
-                        elif (
-                            self._directory_handling_type == __class__.Directory.RECURSE
-                            or self._directory_handling_type == __class__.Directory.RECURSE_LINKS
-                        ):
-                            followlinks = (self._directory_handling_type == __class__.Directory.RECURSE_LINKS)
-                            for root, dirs, recurse_files in os.walk(expanded_file.name, followlinks=followlinks):
-                                if not self._is_excluded_dir(root):
-                                    for recurse_file in recurse_files:
-                                        file_path = os.path.join(root, recurse_file)
-                                        if self._parse_file(self._make_file_iterable(file_path), data):
-                                            matched_files += [file_path]
-                                else:
-                                    # Do nothing and exclude anything that follows
-                                    dirs[:] = []
-                else:
-                    if self._parse_file(expanded_file, data):
-                        matched_files += [expanded_file.name]
+                if self._parse_file(file, data):
+                    matched_files += [file.name]
 
         return matched_files
 
@@ -1795,24 +1799,13 @@ class GrepArgParser:
                 args.file.insert(0, args.expressions_positional)
         elif args.expressions_file:
             for file_group in args.expressions_file:
-                for file in file_group:
-                    if _is_windows():
-                        # Need to manually expand this out
-                        expanded_files = [f for f in glob.glob(file)]
-                        if not expanded_files:
-                            if not args.no_messages:
-                                print('No match for: {}'.format(file), file=sys.stderr)
-                            continue
-                    else:
-                        # *nix and *nix based systems do this from command line
-                        expanded_files = [file]
-                    for expressions_file in expanded_files:
-                        try:
-                            with open(expressions_file, 'r') as fp:
-                                expressions.extend(_parse_expressions(fp.read()))
-                        except EnvironmentError as ex:
-                            if not args.no_messages:
-                                print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
+                for file in _expand_cl_paths(file_group):
+                    try:
+                        with open(file, 'r') as fp:
+                            expressions.extend(_parse_expressions(fp.read()))
+                    except EnvironmentError as ex:
+                        if not args.no_messages:
+                            print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
             # The first positional (expressions_positional) is a file
             if args.expressions_positional is not None:
                 args.file.insert(0, args.expressions_positional)
@@ -1931,29 +1924,18 @@ class GrepArgParser:
             grep_object.add_file_exclude_globs(exclude_glob)
 
         for exclude_files in args.exclude_from:
-            for exclude_file in exclude_files:
-                if _is_windows():
-                    # Need to manually expand this out
-                    expanded_files = [f for f in glob.glob(exclude_file)]
-                    if not expanded_files:
-                        if not args.no_messages:
-                            print('No match for: {}'.format(exclude_file), file=sys.stderr)
-                        continue
-                else:
-                    # *nix and *nix based systems do this from command line
-                    expanded_files = [exclude_file]
-                for expanded_file in expanded_files:
-                    try:
-                        with open(expanded_file, 'r') as fp:
-                            for line in fp.readlines():
-                                if line.endswith('\n'):
-                                    line = line[:-1]
-                                if line.endswith('\r'):
-                                    line = line[:-1]
-                                grep_object.add_file_exclude_globs(line)
-                    except EnvironmentError as ex:
-                        if not args.no_messages:
-                            print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
+            for exclude_file in _expand_cl_paths(exclude_files):
+                try:
+                    with open(exclude_file, 'r') as fp:
+                        for line in fp.readlines():
+                            if line.endswith('\n'):
+                                line = line[:-1]
+                            if line.endswith('\r'):
+                                line = line[:-1]
+                            grep_object.add_file_exclude_globs(line)
+                except EnvironmentError as ex:
+                    if not args.no_messages:
+                        print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
 
         for exclude_glob in args.exclude_dir:
             grep_object.add_dir_exclude_globs(exclude_glob)
