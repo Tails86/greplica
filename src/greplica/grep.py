@@ -360,6 +360,9 @@ class AnsiString:
         Note: The desired effect may not be achieved if the same setting is applied over an
               overlapping range of characters.
         '''
+        if length is not None and length <= 0:
+            raise ValueError('Invalid length {}'.format(length))
+
         settings = __class__.Settings(setting_or_settings)
 
         # Apply settings
