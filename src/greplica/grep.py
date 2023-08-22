@@ -1618,7 +1618,7 @@ class Grep:
         matched_files = []
 
         for file in data.files:
-            if _is_windows():
+            if _is_windows() and isinstance(file, AutoInputFileIterable):
                 # Need to manually expand this out
                 expanded_files = [self._make_file_iterable(f) for f in glob.glob(file.name)]
                 if not expanded_files:
