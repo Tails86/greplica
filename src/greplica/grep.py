@@ -337,25 +337,27 @@ class AnsiString:
         return self._s
 
     @staticmethod
-    def _insert_settings_to_dict(settings_dict, idx, apply, settings, insert_beginning=False):
+    def _insert_settings_to_dict(settings_dict, idx, apply, settings, topmost=True):
         if idx not in settings_dict:
             settings_dict[idx] = [[] for _ in range(__class__.SETTINGS_ITEM_LIST_LEN)]
         list_idx = __class__.SETTINGS_APPLY_IDX if apply else __class__.SETTINGS_REMOVE_IDX
-        if insert_beginning:
-            settings_dict[idx][list_idx].insert(0, settings)
-        else:
+        if topmost:
             settings_dict[idx][list_idx].append(settings)
+        else:
+            settings_dict[idx][list_idx].insert(0, settings)
 
-    def _insert_settings(self, idx, apply, settings):
-        __class__._insert_settings_to_dict(self._color_settings, idx, apply, settings, False)
+    def _insert_settings(self, idx, apply, settings, topmost=True):
+        __class__._insert_settings_to_dict(self._color_settings, idx, apply, settings, topmost)
 
-    def apply_formatting(self, setting_or_settings, start_idx=0, length=None):
+    def apply_formatting(self, setting_or_settings, start_idx=0, length=None, topmost=True):
         '''
         Sets the formatting for a given range of characters.
         Inputs: setting_or_settings - Can either be a single item or list of items;
                                       each item can either be a string or AnsiFormat type
                 start_idx - The string start index where setting(s) are to be applied
                 length - Number of characters to apply settings or None to apply until end of string
+                topmost - When true, this setting is placed at the end of the set for the given
+                        start_index meaning it is applied last; when false, setting is applied first
 
         Note: The desired effect may not be achieved if the same setting is applied over an
               overlapping range of characters.
@@ -369,11 +371,11 @@ class AnsiString:
         settings = __class__.Settings(setting_or_settings)
 
         # Apply settings
-        self._insert_settings(start_idx, True, settings)
+        self._insert_settings(start_idx, True, settings, topmost)
 
         if length is not None:
             # Remove settings
-            self._insert_settings(start_idx + length, False, settings)
+            self._insert_settings(start_idx + length, False, settings, topmost)
 
     def apply_formatting_for_match(self, setting_or_settings, match_object, group=0):
         '''
@@ -1165,6 +1167,7 @@ class Grep:
             self.current_after_context_counter = 0
             self.binary_detected = False
             self.line_num = 0
+            self.byte_offset = 0
             self.num_matches = 0
             self.file = file
             if file:
@@ -1240,12 +1243,12 @@ class Grep:
                 else:
                     # Note this is a bit more flexible as \x00 can be decoded by Python without error
                     self.binary_detected = True
-                    self.formatted_line = AnsiString(self.line, self.matching_line_color)
+                    self.formatted_line = AnsiString(self.line)
             else:
                 # Make line lower case if fixed strings are used
                 if self.ignore_case and self.fixed_string_parse:
                     str_line = str_line.lower()
-                self.formatted_line = AnsiString(str_line, self.matching_line_color)
+                self.formatted_line = AnsiString(str_line)
 
             self.line_slices = []
 
@@ -1255,6 +1258,8 @@ class Grep:
             if not line_slices:
                 # Default to printing the entire line
                 line_slices = [slice(0, None)]
+            else:
+                line_slices.sort(key=lambda x: x.start)
 
             for line_slice in line_slices:
                 if line_slice.start is not None:
@@ -1275,13 +1280,11 @@ class Grep:
             Inputs: is_match - True iff the current line is a match
             '''
 
-            # TODO: match found and print aren't always linked (like when invert is applied)
-
             if is_match:
                 self.num_matches += 1
+                self.formatted_line.apply_formatting(self.matching_line_color, topmost=False)
             else:
-                self.formatted_line.clear_formatting()
-                self.formatted_line.apply_formatting(self.context_line_color)
+                self.formatted_line.apply_formatting(self.context_line_color, topmost=False)
 
             if (
                 (is_match or  (self.current_after_context_counter > 0))
@@ -1502,15 +1505,17 @@ class Grep:
         '''
         match_found = False
         for expression in data.expressions:
-            if not expression:
+            if match_found and not data.color_enabled and not self.only_matching:
+                # No need to keep looping through expressions
+                break
+            elif not expression:
                 # Special case: always a match on empty string, and nothing to color
                 match_found = True
             elif data.fixed_string_parse:
                 loc = data.line.find(expression)
                 if loc >= 0:
-                    match_found = not self._invert_match
-                    # TODO: it may still necessary to apply formatting (like when invert and context used)
-                    if match_found and (data.color_enabled or self.only_matching):
+                    match_found = True
+                    if data.color_enabled or self.only_matching:
                         while loc >= 0:
                             if data.color_enabled:
                                 data.formatted_line.apply_formatting(
@@ -1518,9 +1523,6 @@ class Grep:
                             if self.only_matching:
                                 data.line_slices.append(slice(loc, loc + len(expression)))
                             loc = data.line.find(expression, loc + len(expression))
-                elif self._invert_match:
-                    # Color setting is ignored in this case - just print it
-                    match_found = True
             else:
                 # Regular expression matching
                 flags = 0
@@ -1529,27 +1531,21 @@ class Grep:
                 if self._line_regexp:
                     m = re.fullmatch(expression, data.line, flags)
                     if m is not None:
-                        match_found = not self._invert_match
+                        match_found = True
                         if data.color_enabled:
                             # This is going to just format the whole line
                             data.formatted_line.apply_formatting_for_match(data.matching_color, m)
                         if self.only_matching:
                             data.line_slices.append(slice(m.start(0), m.end(0)))
-                    elif self._invert_match:
-                        # Color setting is ignored in this case - just print it
-                        match_found = True
                 else:
-                    line_matches = False
                     for m in re.finditer(expression, data.line, flags):
-                        line_matches = True
-                        match_found = not self._invert_match
+                        match_found = True
                         if data.color_enabled:
                             data.formatted_line.apply_formatting_for_match(data.matching_color, m)
                         if self.only_matching:
                             data.line_slices.append(slice(m.start(0), m.end(0)))
-                    if self._invert_match and not line_matches:
-                        # Color setting is ignored in this case - just print it
-                        match_found = True
+        if self._invert_match:
+            match_found = not match_found
         data.parse_complete(match_found)
         return match_found
 
