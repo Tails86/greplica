@@ -1648,6 +1648,8 @@ class GrepArgParser:
             prog=THIS_FILE_NAME,
             description='Reimplementation of grep command entirely in Python.',
             add_help=False)
+        self._parser.register('action', 'extend', __class__.ExtendArgparseAction)
+
         self._parser.add_argument('expressions_positional', type=str, nargs='?', default=None, metavar='EXPRESSIONS',
                             help='Expressions to search for, separated by newline character (\\n). '
                             'This is required if --regexp or --file are not specified.')
@@ -1667,7 +1669,7 @@ class GrepArgParser:
                                 default=None,
                                 help='use EXPRESSIONS for matching')
         regexp_group.add_argument('-f', '--file', metavar='FILE', dest='expressions_file', nargs='+',
-                                  action='append', default=[], type=str,
+                                  action='extend', default=[], type=str,
                                   help='take EXPRESSIONS from FILE')
         regexp_group.add_argument('-i', '--ignore-case', action='store_true',
                                 help='ignore case in expressions')
@@ -1714,13 +1716,13 @@ class GrepArgParser:
                                      'ACTION is \'read\', \'recurse\', or \'skip\'')
         output_ctrl_grp.add_argument('-r', '--recursive', action='store_true', help='same as --directories=recurse')
         output_ctrl_grp.add_argument('-R', '--dereference-recursive', action='store_true', help='same as --directories=recurse_links')
-        output_ctrl_grp.add_argument('--include', type=str, nargs='+', metavar='GLOB', action='append', default=[],
+        output_ctrl_grp.add_argument('--include', type=str, nargs='+', metavar='GLOB', action='extend', default=[],
                                      help='limit files to those matching GLOB')
-        output_ctrl_grp.add_argument('--exclude', type=str, nargs='+', metavar='GLOB', action='append', default=[],
+        output_ctrl_grp.add_argument('--exclude', type=str, nargs='+', metavar='GLOB', action='extend', default=[],
                                      help='skip files that match GLOB')
-        output_ctrl_grp.add_argument('--exclude-from', type=str, nargs='+', metavar='FILE', action='append', default=[],
+        output_ctrl_grp.add_argument('--exclude-from', type=str, nargs='+', metavar='FILE', action='extend', default=[],
                                      help='read FILE for exclude globs file name globs')
-        output_ctrl_grp.add_argument('--exclude-dir', type=str, nargs='+', metavar='GLOB', action='append', default=[],
+        output_ctrl_grp.add_argument('--exclude-dir', type=str, nargs='+', metavar='GLOB', action='extend', default=[],
                                      help='skip directories that match GLOB')
         output_ctrl_grp.add_argument('-L', '--files-without-match', action='store_true', help='print only names of FILEs with no selected lines')
         output_ctrl_grp.add_argument('-l', '--files-with-matches', action='store_true', help='print only names of FILEs with selected lines')
@@ -1758,6 +1760,12 @@ class GrepArgParser:
         context_ctrl_grp.add_argument('-U', '--binary', action='store_true', help='do not strip CR characters at EOL (MSDOS/Windows)')
 
         self._args = None
+
+    class ExtendArgparseAction(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            items = getattr(namespace, self.dest, [])
+            items.extend(values)
+            setattr(namespace, self.dest, items)
 
     @staticmethod
     def _is_windows():
@@ -1920,28 +1928,23 @@ class GrepArgParser:
         else:
             grep_object.binary_parse_function = Grep.BinaryParseFunction.PRINT_ERROR
 
-        for include_glob in self._args.include:
-            grep_object.add_file_include_globs(include_glob)
+        grep_object.add_file_include_globs(self._args.include)
+        grep_object.add_file_exclude_globs(self._args.exclude)
 
-        for exclude_glob in self._args.exclude:
-            grep_object.add_file_exclude_globs(exclude_glob)
+        for exclude_file in self._expand_cli_paths(self._args.exclude_from):
+            try:
+                with open(exclude_file, 'r') as fp:
+                    for line in fp.readlines():
+                        if line.endswith('\n'):
+                            line = line[:-1]
+                        if line.endswith('\r'):
+                            line = line[:-1]
+                        grep_object.add_file_exclude_globs(line)
+            except EnvironmentError as ex:
+                if not self._args.no_messages:
+                    print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
 
-        for exclude_files in self._args.exclude_from:
-            for exclude_file in self._expand_cli_paths(exclude_files):
-                try:
-                    with open(exclude_file, 'r') as fp:
-                        for line in fp.readlines():
-                            if line.endswith('\n'):
-                                line = line[:-1]
-                            if line.endswith('\r'):
-                                line = line[:-1]
-                            grep_object.add_file_exclude_globs(line)
-                except EnvironmentError as ex:
-                    if not self._args.no_messages:
-                        print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
-
-        for exclude_glob in self._args.exclude_dir:
-            grep_object.add_dir_exclude_globs(exclude_glob)
+        grep_object.add_dir_exclude_globs(self._args.exclude_dir)
 
         return True
 
