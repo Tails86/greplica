@@ -337,14 +337,17 @@ class AnsiString:
         return self._s
 
     @staticmethod
-    def _insert_settings_to_dict(settings_dict, idx, apply, settings):
+    def _insert_settings_to_dict(settings_dict, idx, apply, settings, insert_beginning=False):
         if idx not in settings_dict:
             settings_dict[idx] = [[] for _ in range(__class__.SETTINGS_ITEM_LIST_LEN)]
         list_idx = __class__.SETTINGS_APPLY_IDX if apply else __class__.SETTINGS_REMOVE_IDX
-        settings_dict[idx][list_idx].append(settings)
+        if insert_beginning:
+            settings_dict[idx][list_idx].insert(0, settings)
+        else:
+            settings_dict[idx][list_idx].append(settings)
 
     def _insert_settings(self, idx, apply, settings):
-        __class__._insert_settings_to_dict(self._color_settings, idx, apply, settings)
+        __class__._insert_settings_to_dict(self._color_settings, idx, apply, settings, False)
 
     def apply_formatting(self, setting_or_settings, start_idx=0, length=None):
         '''
@@ -357,7 +360,10 @@ class AnsiString:
         Note: The desired effect may not be achieved if the same setting is applied over an
               overlapping range of characters.
         '''
-        if length is not None and length <= 0:
+        if not setting_or_settings:
+            # Ignore - nothing to apply
+            return
+        elif length is not None and length <= 0:
             raise ValueError('Invalid length {}'.format(length))
 
         settings = __class__.Settings(setting_or_settings)
@@ -499,7 +505,7 @@ class AnsiString:
                         format_settings_strs.append(ansi_format.value)
                 format_settings = __class__.Settings(';'.join(format_settings_strs))
 
-            __class__._insert_settings_to_dict(settings_dict, 0, True, format_settings)
+            __class__._insert_settings_to_dict(settings_dict, 0, True, format_settings, True)
 
         clear_needed = False
         for idx, settings, current_settings in __class__.SettingsIterator(settings_dict):
@@ -1125,6 +1131,8 @@ class Grep:
             self.fixed_string_parse = False
             self.color_enabled = False
             self.matching_color = None
+            self.matching_line_color = None
+            self.context_line_color = None
             self.file = None
             self.file_iter = None
             self.line_data_dict = {}
@@ -1231,12 +1239,12 @@ class Grep:
                 else:
                     # Note this is a bit more flexible as \x00 can be decoded by Python without error
                     self.binary_detected = True
-                    self.formatted_line = AnsiString(self.line)
+                    self.formatted_line = AnsiString(self.line, self.matching_line_color)
             else:
                 # Make line lower case if fixed strings are used
                 if self.ignore_case and self.fixed_string_parse:
                     str_line = str_line.lower()
-                self.formatted_line = AnsiString(str_line)
+                self.formatted_line = AnsiString(str_line, self.matching_line_color)
 
             self.line_slices = []
 
@@ -1267,6 +1275,9 @@ class Grep:
             '''
             if is_match:
                 self.num_matches += 1
+            else:
+                self.formatted_line.clear_formatting()
+                self.formatted_line.apply_formatting(self.context_line_color)
 
             if (
                 (is_match or  (self.current_after_context_counter > 0))
@@ -1309,7 +1320,14 @@ class Grep:
         return AutoInputFileIterable(path, 'rb', self.end)
 
     def _generate_line_format(self, grep_color_dict, name_num_sep, name_byte_sep, result_sep):
+        if grep_color_dict and 'se' in grep_color_dict:
+            se_color = grep_color_dict['se']
+            name_num_sep = str(AnsiString(name_num_sep, se_color))
+            name_byte_sep = str(AnsiString(name_byte_sep, se_color))
+            result_sep = str(AnsiString(result_sep, se_color))
+
         line_format = ''
+
         output_file_name_only = (
             self._print_count_only
             or self._print_matching_files_only
@@ -1391,19 +1409,6 @@ class Grep:
         else:
             data.files = [self._make_file_iterable(f) for f in self._files]
 
-        if data.color_enabled:
-            grep_color_dict = __class__._generate_color_dict()
-            data.matching_color = grep_color_dict['mt']
-            if data.matching_color is None:
-                if self.invert_match:
-                    # I don't get this setting because matching line isn't colored in this case
-                    data.matching_color = grep_color_dict['mc']
-                else:
-                    data.matching_color = grep_color_dict['ms']
-        else:
-            grep_color_dict = None
-            data.matching_color = None
-
         data.expressions = self._expressions
 
         for i in range(len(data.expressions)):
@@ -1433,34 +1438,42 @@ class Grep:
         else:
             data.fixed_string_parse = (self._search_type == __class__.SearchType.FIXED_STRINGS)
 
-        if data.color_enabled and grep_color_dict['se']:
-            data.line_format = self._generate_line_format(
-                grep_color_dict,
-                str(AnsiString(self._name_num_sep, grep_color_dict['se'])),
-                str(AnsiString(self._name_byte_sep, grep_color_dict['se'])),
-                str(AnsiString(self._results_sep, grep_color_dict['se']))
-            )
-            data.context_line_format = self._generate_line_format(
-                grep_color_dict,
-                str(AnsiString(self._context_name_num_sep, grep_color_dict['se'])),
-                str(AnsiString(self._context_name_byte_sep, grep_color_dict['se'])),
-                str(AnsiString(self._context_results_sep, grep_color_dict['se']))
-            )
+        if data.color_enabled:
+            grep_color_dict = __class__._generate_color_dict()
+            data.matching_color = grep_color_dict['mt']
+            if data.matching_color is None:
+                if self.invert_match:
+                    # I don't get this setting because matching line isn't colored in this case
+                    data.matching_color = grep_color_dict['mc']
+                else:
+                    data.matching_color = grep_color_dict['ms']
+            if grep_color_dict['rv']:
+                data.matching_line_color = grep_color_dict['cx']
+                data.context_line_color = grep_color_dict['sl']
+            else:
+                data.matching_line_color = grep_color_dict['sl']
+                data.context_line_color = grep_color_dict['cx']
             data.context_sep = str(AnsiString(self._context_sep, grep_color_dict['se']))
         else:
-            data.line_format = self._generate_line_format(
-                grep_color_dict,
-                self._name_num_sep,
-                self._name_byte_sep,
-                self._results_sep
-            )
-            data.context_line_format = self._generate_line_format(
-                grep_color_dict,
-                self._context_name_num_sep,
-                self._context_name_byte_sep,
-                self._context_results_sep
-            )
+            grep_color_dict = None
+            data.matching_color = None
+            data.matching_line_color = None
+            data.context_line_color = None
             data.context_sep = self._context_sep
+
+        data.line_format = self._generate_line_format(
+            grep_color_dict,
+            self._name_num_sep,
+            self._name_byte_sep,
+            self._results_sep
+        )
+
+        data.context_line_format = self._generate_line_format(
+            grep_color_dict,
+            self._context_name_num_sep,
+            self._context_name_byte_sep,
+            self._context_results_sep
+        )
 
         if (
             not self._quiet
