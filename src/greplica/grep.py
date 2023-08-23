@@ -32,7 +32,7 @@ import fnmatch
 import glob
 
 __version__ = '0.9.10'
-THIS_FILE_NAME = os.path.basename(__file__)
+PACKAGE_NAME = 'greplica'
 
 class BinaryDetectedException(Exception):
     def __init__(self, *args: object) -> None:
@@ -1577,7 +1577,7 @@ class Grep:
         except EnvironmentError as ex:
             # This occurs if permission is denied
             if not self._no_messages:
-                print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
+                print('{}: {}'.format(PACKAGE_NAME, str(ex)), file=sys.stderr)
         else:
             try:
                 while data.next_line() and (self._max_count is None or data.num_matches < self._max_count):
@@ -1632,7 +1632,7 @@ class Grep:
             if os.path.isdir(file.name):
                 if not self._is_excluded_dir(file.name):
                     if self._directory_handling_type == __class__.Directory.READ:
-                        print('{}: {}: Is a directory'.format(THIS_FILE_NAME, file.name))
+                        print('{}: {}: Is a directory'.format(PACKAGE_NAME, file.name))
                     elif (
                         self._directory_handling_type == __class__.Directory.RECURSE
                         or self._directory_handling_type == __class__.Directory.RECURSE_LINKS
@@ -1659,7 +1659,7 @@ class GrepArgParser:
     '''
     def __init__(self):
         self._parser = argparse.ArgumentParser(
-            prog=THIS_FILE_NAME,
+            prog=PACKAGE_NAME,
             description='Reimplementation of grep command entirely in Python.',
             add_help=False)
         self._parser.register('action', 'extend', __class__.ExtendArgparseAction)
@@ -1811,7 +1811,7 @@ class GrepArgParser:
             return False
 
         if self._args.version:
-            print('{} {}'.format(THIS_FILE_NAME, __version__))
+            print('{} {}'.format(PACKAGE_NAME, __version__))
             sys.exit(0)
 
         # Pars expressions from all of the different options into a single list of expressions
@@ -1830,7 +1830,7 @@ class GrepArgParser:
                             expressions.extend(_parse_expressions(fp.read()))
                     except EnvironmentError as ex:
                         if not self._args.no_messages:
-                            print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
+                            print('{}: {}'.format(PACKAGE_NAME, str(ex)), file=sys.stderr)
             # The first positional (expressions_positional) is a file
             if self._args.expressions_positional is not None:
                 self._args.file.insert(0, self._args.expressions_positional)
@@ -1956,7 +1956,7 @@ class GrepArgParser:
                         grep_object.add_file_exclude_globs(line)
             except EnvironmentError as ex:
                 if not self._args.no_messages:
-                    print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
+                    print('{}: {}'.format(PACKAGE_NAME, str(ex)), file=sys.stderr)
 
         grep_object.add_dir_exclude_globs(self._args.exclude_dir)
 
