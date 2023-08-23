@@ -1098,10 +1098,11 @@ class Grep:
             colors = os.environ['GREP_COLORS'].split(':')
             for color in colors:
                 key_val = color.split('=', maxsplit=1)
-                if len(key_val) == 2 and key_val[0] in grep_color_dict:
+                if key_val[0] in grep_color_dict:
                     if isinstance(grep_color_dict[key_val[0]], bool):
-                        grep_color_dict[key_val[0]] = key_val[1].lower() in ['1', 't', 'true', 'on']
-                    else:
+                        # Set the value to True when specified at all
+                        grep_color_dict[key_val[0]] = True
+                    elif len(key_val) == 2:
                         # The string must be integers separated by semicolon
                         is_valid = True
                         for item in key_val[1].split(';'):
@@ -1273,6 +1274,9 @@ class Grep:
             Called when parsing of line is complete.
             Inputs: is_match - True iff the current line is a match
             '''
+
+            # TODO: match found and print aren't always linked (like when invert is applied)
+
             if is_match:
                 self.num_matches += 1
             else:
@@ -1447,7 +1451,7 @@ class Grep:
                     data.matching_color = grep_color_dict['mc']
                 else:
                     data.matching_color = grep_color_dict['ms']
-            if grep_color_dict['rv']:
+            if grep_color_dict['rv'] and self._invert_match:
                 data.matching_line_color = grep_color_dict['cx']
                 data.context_line_color = grep_color_dict['sl']
             else:
@@ -1505,6 +1509,7 @@ class Grep:
                 loc = data.line.find(expression)
                 if loc >= 0:
                     match_found = not self._invert_match
+                    # TODO: it may still necessary to apply formatting (like when invert and context used)
                     if match_found and (data.color_enabled or self.only_matching):
                         while loc >= 0:
                             if data.color_enabled:
