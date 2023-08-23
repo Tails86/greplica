@@ -34,24 +34,6 @@ import glob
 __version__ = '0.9.10'
 THIS_FILE_NAME = os.path.basename(__file__)
 
-def _is_windows():
-    return sys.platform.lower().startswith('win')
-
-def _expand_cl_path(path, show_errors):
-    if _is_windows():
-        # Need to manually expand this out
-        expanded_paths = [f for f in glob.glob(path)]
-        if not expanded_paths:
-            if show_errors:
-                print('No match for: {}'.format(path), file=sys.stderr)
-    else:
-        # *nix and *nix based systems do this from command line
-        expanded_paths = [path]
-    return expanded_paths
-
-def _expand_cl_paths(paths, show_errors):
-    return [y for x in paths for y in _expand_cl_path(x, not show_errors)]
-
 class BinaryDetectedException(Exception):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
@@ -1407,7 +1389,7 @@ class Grep:
             else:
                 data.files = [StdinIterable(True, self.end, self._label)]
         else:
-            data.files = [self._make_file_iterable(f) for f in _expand_cl_paths(self._files, not self._no_messages)]
+            data.files = [self._make_file_iterable(f) for f in self._files]
 
         if data.color_enabled:
             grep_color_dict = __class__._generate_color_dict()
@@ -1775,43 +1757,64 @@ class GrepArgParser:
                                     'WHEN is \'always\', \'never\', or \'auto\'')
         context_ctrl_grp.add_argument('-U', '--binary', action='store_true', help='do not strip CR characters at EOL (MSDOS/Windows)')
 
+        self._args = None
+
+    @staticmethod
+    def _is_windows():
+        return sys.platform.lower().startswith('win')
+
+    def _expand_cli_path(self, path):
+        if __class__._is_windows():
+            # Need to manually expand this out
+            expanded_paths = [f for f in glob.glob(path)]
+            if not expanded_paths:
+                if not self._args.no_messages:
+                    print('No match for: {}'.format(path), file=sys.stderr)
+        else:
+            # *nix and *nix based systems do this from command line
+            expanded_paths = [path]
+        return expanded_paths
+
+    def _expand_cli_paths(self, paths):
+        return [y for x in paths for y in self._expand_cli_path(x)]
+
     def parse(self, cliargs, grep_object:Grep):
         '''
         Parses command line arguments into the given Grep object
         '''
         grep_object.reset()
-        args = self._parser.parse_args(cliargs)
+        self._args = self._parser.parse_args(cliargs)
 
-        if not args:
+        if not self._args:
             return False
 
-        if args.version:
+        if self._args.version:
             print('{} {}'.format(THIS_FILE_NAME, __version__))
             sys.exit(0)
 
         # Pars expressions from all of the different options into a single list of expressions
         expressions = []
-        if args.expressions_option is not None:
+        if self._args.expressions_option is not None:
             # Set expressions to the option
-            expressions.extend(_parse_expressions(args.expressions_option))
+            expressions.extend(_parse_expressions(self._args.expressions_option))
             # The first positional (expressions_positional) is a file
-            if args.expressions_positional is not None:
-                args.file.insert(0, args.expressions_positional)
-        elif args.expressions_file:
-            for file_group in args.expressions_file:
-                for file in _expand_cl_paths(file_group, not args.no_messages):
+            if self._args.expressions_positional is not None:
+                self._args.file.insert(0, self._args.expressions_positional)
+        elif self._args.expressions_file:
+            for file_group in self._args.expressions_file:
+                for file in self._expand_cli_paths(file_group):
                     try:
                         with open(file, 'r') as fp:
                             expressions.extend(_parse_expressions(fp.read()))
                     except EnvironmentError as ex:
-                        if not args.no_messages:
+                        if not self._args.no_messages:
                             print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
             # The first positional (expressions_positional) is a file
-            if args.expressions_positional is not None:
-                args.file.insert(0, args.expressions_positional)
-        elif args.expressions_positional is not None:
+            if self._args.expressions_positional is not None:
+                self._args.file.insert(0, self._args.expressions_positional)
+        elif self._args.expressions_positional is not None:
             # Set expressions to the positional
-            expressions.extend(_parse_expressions(args.expressions_positional))
+            expressions.extend(_parse_expressions(self._args.expressions_positional))
 
         if not expressions:
             self._parser.print_usage()
@@ -1820,111 +1823,111 @@ class GrepArgParser:
 
         grep_object.add_expression(expressions)
 
-        if args.file:
-            grep_object.add_files(args.file)
+        if self._args.file:
+            grep_object.add_files(self._expand_cli_paths(self._args.file))
 
-        if args.extended_regexp:
+        if self._args.extended_regexp:
             grep_object.search_type = Grep.SearchType.EXTENDED_REGEXP
-        elif args.fixed_strings:
+        elif self._args.fixed_strings:
             grep_object.search_type = Grep.SearchType.FIXED_STRINGS
         else:
             # Basic regexp is default if no type specified
             grep_object.search_type = Grep.SearchType.BASIC_REGEXP
 
-        grep_object.ignore_case = args.ignore_case
-        grep_object.word_regexp = args.word_regexp
-        grep_object.line_regexp = args.line_regexp
-        grep_object.no_messages = args.no_messages
-        grep_object.invert_match = args.invert_match
-        grep_object.max_count = args.max_count
-        grep_object.output_line_numbers = args.line_number
-        grep_object.output_file_name = args.with_filename
-        grep_object.output_byte_offset = args.byte_offset
-        grep_object.line_buffered = args.line_buffered
-        grep_object.label = args.label
-        grep_object.quiet = args.quiet
-        grep_object.only_matching = args.only_matching
-        grep_object.strip_cr = not args.binary
-        grep_object.print_matching_files_only = args.files_with_matches
-        grep_object.print_non_matching_files_only = args.files_without_match
-        grep_object.print_count_only = args.count
+        grep_object.ignore_case = self._args.ignore_case
+        grep_object.word_regexp = self._args.word_regexp
+        grep_object.line_regexp = self._args.line_regexp
+        grep_object.no_messages = self._args.no_messages
+        grep_object.invert_match = self._args.invert_match
+        grep_object.max_count = self._args.max_count
+        grep_object.output_line_numbers = self._args.line_number
+        grep_object.output_file_name = self._args.with_filename
+        grep_object.output_byte_offset = self._args.byte_offset
+        grep_object.line_buffered = self._args.line_buffered
+        grep_object.label = self._args.label
+        grep_object.quiet = self._args.quiet
+        grep_object.only_matching = self._args.only_matching
+        grep_object.strip_cr = not self._args.binary
+        grep_object.print_matching_files_only = self._args.files_with_matches
+        grep_object.print_non_matching_files_only = self._args.files_without_match
+        grep_object.print_count_only = self._args.count
 
-        if args.context is not None:
-            grep_object.before_context_count = args.context
-            grep_object.after_context_count = args.context
+        if self._args.context is not None:
+            grep_object.before_context_count = self._args.context
+            grep_object.after_context_count = self._args.context
         else:
-            if args.before_context is not None:
-                grep_object.before_context_count = args.before_context
-            if args.after_context is not None:
-                grep_object.after_context_count = args.after_context
+            if self._args.before_context is not None:
+                grep_object.before_context_count = self._args.before_context
+            if self._args.after_context is not None:
+                grep_object.after_context_count = self._args.after_context
 
-        if args.recursive or args.directories == 'recurse':
+        if self._args.recursive or self._args.directories == 'recurse':
             grep_object.directory_handling_type = Grep.Directory.RECURSE
-            if not args.no_filename:
+            if not self._args.no_filename:
                 # Force output of file name
                 grep_object.output_file_name = True
-        elif args.dereference_recursive or args.directories == 'recurse_links':
+        elif self._args.dereference_recursive or self._args.directories == 'recurse_links':
             grep_object.directory_handling_type = Grep.Directory.RECURSE_LINKS
-            if not args.no_filename:
+            if not self._args.no_filename:
                 # Force output of file name
                 grep_object.output_file_name = True
-        elif args.directories == 'skip':
+        elif self._args.directories == 'skip':
             grep_object.directory_handling_type = Grep.Directory.SKIP
         else:
             grep_object.directory_handling_type = Grep.Directory.READ
 
-        if args.null_data:
+        if self._args.null_data:
             grep_object.end = b'\x00'
         else:
-            grep_object.end = bytes(args.end, "utf-8").decode("unicode_escape")
+            grep_object.end = bytes(self._args.end, "utf-8").decode("unicode_escape")
 
-        grep_object.results_sep = bytes(args.result_sep, "utf-8").decode("unicode_escape")
-        if args.initial_tab:
+        grep_object.results_sep = bytes(self._args.result_sep, "utf-8").decode("unicode_escape")
+        if self._args.initial_tab:
             grep_object.results_sep += '\t'
-        if args.null:
+        if self._args.null:
             grep_object.results_sep += '\0'
-        grep_object.name_num_sep = bytes(args.name_num_sep, "utf-8").decode("unicode_escape")
-        if args.initial_tab:
+        grep_object.name_num_sep = bytes(self._args.name_num_sep, "utf-8").decode("unicode_escape")
+        if self._args.initial_tab:
             grep_object.name_num_sep += '\t'
-        grep_object.name_byte_sep = bytes(args.name_byte_sep, "utf-8").decode("unicode_escape")
-        if args.initial_tab:
+        grep_object.name_byte_sep = bytes(self._args.name_byte_sep, "utf-8").decode("unicode_escape")
+        if self._args.initial_tab:
             grep_object.name_byte_sep += '\t'
 
-        grep_object.context_sep = bytes(args.context_group_sep, "utf-8").decode("unicode_escape")
-        grep_object.context_results_sep = bytes(args.context_result_sep, "utf-8").decode("unicode_escape")
-        if args.initial_tab:
+        grep_object.context_sep = bytes(self._args.context_group_sep, "utf-8").decode("unicode_escape")
+        grep_object.context_results_sep = bytes(self._args.context_result_sep, "utf-8").decode("unicode_escape")
+        if self._args.initial_tab:
             grep_object.context_results_sep += '\t'
-        if args.null:
+        if self._args.null:
             grep_object.context_results_sep += '\0'
-        grep_object.context_name_num_sep = bytes(args.context_name_num_sep, "utf-8").decode("unicode_escape")
-        if args.initial_tab:
+        grep_object.context_name_num_sep = bytes(self._args.context_name_num_sep, "utf-8").decode("unicode_escape")
+        if self._args.initial_tab:
             grep_object.context_name_num_sep += '\t'
-        grep_object.context_name_byte_sep = bytes(args.context_name_byte_sep, "utf-8").decode("unicode_escape")
-        if args.initial_tab:
+        grep_object.context_name_byte_sep = bytes(self._args.context_name_byte_sep, "utf-8").decode("unicode_escape")
+        if self._args.initial_tab:
             grep_object.context_name_byte_sep += '\t'
 
-        if args.color == 'always':
+        if self._args.color == 'always':
             grep_object.color_output_mode = Grep.ColorOutputMode.ALWAYS
-        elif args.color == 'never':
+        elif self._args.color == 'never':
             grep_object.color_output_mode = Grep.ColorOutputMode.NEVER
         else:
             grep_object.color_output_mode = Grep.ColorOutputMode.AUTO
 
-        if args.binary_files == 'text' or args.text:
+        if self._args.binary_files == 'text' or self._args.text:
             grep_object.binary_parse_function = Grep.BinaryParseFunction.IGNORE_DECODE_ERRORS
-        elif args.binary_files == 'without-match' or args.binary_without_match:
+        elif self._args.binary_files == 'without-match' or self._args.binary_without_match:
             grep_object.binary_parse_function = Grep.BinaryParseFunction.SKIP
         else:
             grep_object.binary_parse_function = Grep.BinaryParseFunction.PRINT_ERROR
 
-        for include_glob in args.include:
+        for include_glob in self._args.include:
             grep_object.add_file_include_globs(include_glob)
 
-        for exclude_glob in args.exclude:
+        for exclude_glob in self._args.exclude:
             grep_object.add_file_exclude_globs(exclude_glob)
 
-        for exclude_files in args.exclude_from:
-            for exclude_file in _expand_cl_paths(exclude_files, not args.no_messages):
+        for exclude_files in self._args.exclude_from:
+            for exclude_file in self._expand_cli_paths(exclude_files):
                 try:
                     with open(exclude_file, 'r') as fp:
                         for line in fp.readlines():
@@ -1934,10 +1937,10 @@ class GrepArgParser:
                                 line = line[:-1]
                             grep_object.add_file_exclude_globs(line)
                 except EnvironmentError as ex:
-                    if not args.no_messages:
+                    if not self._args.no_messages:
                         print('{}: {}'.format(THIS_FILE_NAME, str(ex)), file=sys.stderr)
 
-        for exclude_glob in args.exclude_dir:
+        for exclude_glob in self._args.exclude_dir:
             grep_object.add_dir_exclude_globs(exclude_glob)
 
         return True
