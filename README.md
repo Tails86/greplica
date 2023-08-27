@@ -52,12 +52,12 @@ positional arguments:
 
 Expression Interpretation:
   -E, --extended-regexp
-                        EXPRESSIONS are "extended" regular expressions In this mode,
+                        EXPRESSIONS are "extended" regular expressions. In this mode,
                         greplica passes regular expressions directly to Python re without
                         modification. This for the most part matches original "extended"
                         syntax, but be aware that there may be differences.
   -F, --fixed-strings   EXPRESSIONS are strings
-  -G, --basic-regexp    EXPRESSIONS are "basic" regular expressions In this mode, greplica
+  -G, --basic-regexp    EXPRESSIONS are "basic" regular expressions. In this mode, greplica
                         modifies escaping sequences for characters ?+{}|() before passing to
                         Python re. This for the most part matches original "basic" syntax,
                         but be aware that there may be differences.

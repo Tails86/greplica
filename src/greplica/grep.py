@@ -1675,14 +1675,14 @@ class GrepArgParser:
         regexp_group = self._parser.add_argument_group('Expression Interpretation')
         regexp_type = regexp_group.add_mutually_exclusive_group()
         regexp_type.add_argument('-E', '--extended-regexp', action='store_true',
-                                help='EXPRESSIONS are "extended" regular expressions\n'
+                                help='EXPRESSIONS are "extended" regular expressions.\n'
                                 'In this mode, greplica passes regular expressions directly to Python re '
                                 'without modification. This for the most part matches original "extended" '
                                 'syntax, but be aware that there may be differences.')
         regexp_type.add_argument('-F', '--fixed-strings', action='store_true',
                                 help='EXPRESSIONS are strings')
         regexp_type.add_argument('-G', '--basic-regexp', action='store_true',
-                                help='EXPRESSIONS are "basic" regular expressions\n'
+                                help='EXPRESSIONS are "basic" regular expressions.\n'
                                 'In this mode, greplica modifies escaping sequences for characters ?+{}|() '
                                 'before passing to Python re. This for the most part matches original "basic" '
                                 'syntax, but be aware that there may be differences.')
