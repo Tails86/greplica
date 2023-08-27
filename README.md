@@ -1,6 +1,26 @@
 # greplica
 A grep clone in Python with both CLI and library interfaces, supporting ANSI color coding and more.
 
+## Known Differences with grep
+
+- The -D, --devices option is not supported and no support is planned. All inputs are handled as
+file streams only, and there is no way to adjust this.
+- The Python module re is internally used for all regular expressions. The inputted regular
+expression is modified only when basic regular expressions are used. See --help for more
+information.
+
+## Development Roadmap
+
+This module is considered "feature complete" but is still in "beta" testing. The following steps
+are left in order to harden the implementation before releasing 1.0.0
+
+- Implement unit tests for all features
+- Add CI workflow
+
+## Contribution
+
+Feel free to open a bug report or make a merge request on [github](https://github.com/Tails86/greplica/issues).
+
 ## Installation
 This project is uploaded to PyPI at https://pypi.org/project/greplica/
 
@@ -8,35 +28,43 @@ To install, ensure you are connected to the internet and execute: `python3 -m pi
 
 ## CLI Help
 ```
-usage: grep.py [-E | -F | -G] [-e EXPRESSIONS] [-f FILE] [-i] [--no-ignore-case] [-w] [-x]
-               [--end END] [-z] [-s] [-v] [-V] [--help] [-m NUM] [-b] [-n]
-               [--line-buffered] [-H] [-h] [--label LABEL] [-o] [-q] [--binary-files TYPE]
-               [-a] [-I] [-d ACTION] [-r] [-R] [--include GLOB [GLOB ...]]
-               [--exclude GLOB [GLOB ...]] [--exclude-from FILE [FILE ...]]
-               [--exclude-dir GLOB [GLOB ...]] [-L] [-l] [-c] [-T] [-Z] [--result-sep SEP]
-               [--name-num-sep SEP] [--name-byte-sep SEP] [--context-group-sep SEP]
-               [--context-result-sep SEP] [--context-name-num-sep SEP]
-               [--context-name-byte-sep SEP] [-B NUM] [-A NUM] [-C NUM] [--color [WHEN]]
-               [-U]
-               [EXPRESSIONS] [FILE [FILE ...]]
+usage: greplica [-E | -F | -G] [-e EXPRESSIONS] [-f FILE [FILE ...]] [-i] [--no-ignore-case]
+                [-w] [-x] [--end END] [-z] [-s] [-v] [-V] [--help] [-m NUM] [-b] [-n]
+                [--line-buffered] [-H] [-h] [--label LABEL] [-o] [-q] [--binary-files TYPE]
+                [-a] [-I] [-d ACTION] [-r] [-R] [--include GLOB [GLOB ...]]
+                [--exclude GLOB [GLOB ...]] [--exclude-from FILE [FILE ...]]
+                [--exclude-dir GLOB [GLOB ...]] [-L] [-l] [-c] [-T] [-Z] [--result-sep SEP]
+                [--name-num-sep SEP] [--name-byte-sep SEP] [--context-group-sep SEP]
+                [--context-result-sep SEP] [--context-name-num-sep SEP]
+                [--context-name-byte-sep SEP] [-B NUM] [-A NUM] [-C NUM] [--color [WHEN]]
+                [-U]
+                [EXPRESSIONS] [FILE [FILE ...]]
 
 Reimplementation of grep command entirely in Python.
 
 positional arguments:
-  EXPRESSIONS           Expressions to search for, separated by newline character (\n).
-                        This is required if --regexp or --file are not specified.
+  EXPRESSIONS           Expressions to search for, separated by newline character (\n). This
+                        is required if --regexp or --file are not specified.
   FILE                  Files or directories to search. Stdin will be searched if not
-                        specified. How directories are handled is controled by -d and -r
-                        options.
+                        specified, unless -r is specified. Then current directory will be
+                        recursively searched.How directories are handled is controlled by -d
+                        and -r options.
 
 Expression Interpretation:
   -E, --extended-regexp
-                        EXPRESSIONS are extended regular expressions
+                        EXPRESSIONS are "extended" regular expressions In this mode,
+                        greplica passes regular expressions directly to Python re without
+                        modification. This for the most part matches original "extended"
+                        syntax, but be aware that there may be differences.
   -F, --fixed-strings   EXPRESSIONS are strings
-  -G, --basic-regexp    EXPRESSIONS are basic regular expressions
+  -G, --basic-regexp    EXPRESSIONS are "basic" regular expressions In this mode, greplica
+                        modifies escaping sequences for characters ?+{}|() before passing to
+                        Python re. This for the most part matches original "basic" syntax,
+                        but be aware that there may be differences.
   -e EXPRESSIONS, --regexp EXPRESSIONS
                         use EXPRESSIONS for matching
-  -f FILE, --file FILE  take EXPRESSIONS from FILE
+  -f FILE [FILE ...], --file FILE [FILE ...]
+                        take EXPRESSIONS from FILE
   -i, --ignore-case     ignore case in expressions
   --no-ignore-case      do not ignore case (default)
   -w, --word-regexp     match whole words only

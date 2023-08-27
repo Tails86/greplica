@@ -31,7 +31,7 @@ import re
 import fnmatch
 import glob
 
-__version__ = '0.9.10'
+__version__ = '0.9.12'
 PACKAGE_NAME = 'greplica'
 
 class BinaryDetectedException(Exception):
@@ -1668,17 +1668,24 @@ class GrepArgParser:
                             help='Expressions to search for, separated by newline character (\\n). '
                             'This is required if --regexp or --file are not specified.')
         self._parser.add_argument('file', type=str, nargs='*', default=[], metavar='FILE',
-                            help='Files or directories to search. Stdin will be searched if not specified. '
-                            'How directories are handled is controled by -d and -r options.')
+                            help='Files or directories to search. Stdin will be searched if not specified, '
+                            ' unless -r is specified. Then current directory will be recursively searched.'
+                            'How directories are handled is controlled by -d and -r options.')
 
         regexp_group = self._parser.add_argument_group('Expression Interpretation')
         regexp_type = regexp_group.add_mutually_exclusive_group()
         regexp_type.add_argument('-E', '--extended-regexp', action='store_true',
-                                help='EXPRESSIONS are extended regular expressions')
+                                help='EXPRESSIONS are "extended" regular expressions\n'
+                                'In this mode, greplica passes regular expressions directly to Python re '
+                                'without modification. This for the most part matches original "extended" '
+                                'syntax, but be aware that there may be differences.')
         regexp_type.add_argument('-F', '--fixed-strings', action='store_true',
                                 help='EXPRESSIONS are strings')
         regexp_type.add_argument('-G', '--basic-regexp', action='store_true',
-                                help='EXPRESSIONS are basic regular expressions')
+                                help='EXPRESSIONS are "basic" regular expressions\n'
+                                'In this mode, greplica modifies escaping sequences for characters ?+{}|() '
+                                'before passing to Python re. This for the most part matches original "basic" '
+                                'syntax, but be aware that there may be differences.')
         regexp_group.add_argument('-e', '--regexp', dest='expressions_option', metavar='EXPRESSIONS', type=str,
                                 default=None,
                                 help='use EXPRESSIONS for matching')
