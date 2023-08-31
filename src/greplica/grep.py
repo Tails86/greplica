@@ -95,6 +95,7 @@ class AutoInputFileIterable(FileIterable):
                     end = end[-newline_len:]
                 else:
                     # End of file
+                    self._fp.close()
                     self._fp = None
                     break
             if b:
@@ -1830,14 +1831,13 @@ class GrepArgParser:
             if self._args.expressions_positional is not None:
                 self._args.file.insert(0, self._args.expressions_positional)
         elif self._args.expressions_file:
-            for file_group in self._args.expressions_file:
-                for file in self._expand_cli_paths(file_group):
-                    try:
-                        with open(file, 'r') as fp:
-                            expressions.extend(_parse_expressions(fp.read()))
-                    except EnvironmentError as ex:
-                        if not self._args.no_messages:
-                            print('{}: {}'.format(PACKAGE_NAME, str(ex)), file=sys.stderr)
+            for file in self._args.expressions_file:
+                try:
+                    with open(file, 'r') as fp:
+                        expressions.extend(_parse_expressions(fp.read()))
+                except EnvironmentError as ex:
+                    if not self._args.no_messages:
+                        print('{}: {}'.format(PACKAGE_NAME, str(ex)), file=sys.stderr)
             # The first positional (expressions_positional) is a file
             if self._args.expressions_positional is not None:
                 self._args.file.insert(0, self._args.expressions_positional)

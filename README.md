@@ -5,17 +5,28 @@ A grep clone in Python with both CLI and library interfaces, supporting ANSI col
 
 - The -D, --devices option is not supported and no support is planned. All inputs are handled as
 file streams only, and there is no way to adjust this.
+- The -P, --perl-regexp option is currently not supported, but support may be added in the future.
+- The -T, --initial-tab option currently doesn't work as well as it does in grep.
+- Context currently cannot be given as raw number -NUM, but support may be added in the future.
 - The Python module re is internally used for all regular expressions. The inputted regular
 expression is modified only when basic regular expressions are used. See --help for more
 information.
 
 ## Development Roadmap
 
-This module is considered "feature complete" but is still in "beta" testing. The following steps
-are left in order to harden the implementation before releasing 1.0.0
+This module is considered "feature complete" as far as features planned for initial release, but
+this is still in "beta" testing. The following steps are left in order to harden the implementation
+before releasing 1.0.0:
 
 - Implement unit tests for all features
 - Add CI workflow
+
+Future planned work includes the following:
+
+- Try to support perl regex syntax
+- Fix tab option
+- Implement -NUM options
+- Optionally return matching lines when Grep.execute() is called from a library
 
 ## Contribution
 
