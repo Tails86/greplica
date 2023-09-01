@@ -73,8 +73,15 @@ class AutoInputFileIterable(FileIterable):
             # Force reading as bytes
             self._file_mode += 'b'
 
+    def __del__(self):
+        if self._fp:
+            self._fp.close()
+            self._fp = None
+
     def __iter__(self):
         # Custom iteration
+        if self._fp:
+            self._fp.close()
         self._fp = open(self._file_path, self._file_mode)
         return self
 
@@ -1169,6 +1176,7 @@ class Grep:
             self.binary_detected = False
             self.line_num = 0
             self.byte_offset = 0
+            self.line_len = 0
             self.num_matches = 0
             self.file = file
             if file:
@@ -1205,7 +1213,7 @@ class Grep:
                     and self.num_matches > 0
                     and self.binary_parse_function == Grep.BinaryParseFunction.PRINT_ERROR
                 ):
-                    status_msgs += ' binary file matches'
+                    status_msgs += 'binary file matches'
                 if self.overflow_detected:
                     if status_msgs:
                         status_msgs += ' and'
