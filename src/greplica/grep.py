@@ -374,7 +374,8 @@ class AnsiString:
             # Ignore - nothing to apply
             return
         elif length is not None and length <= 0:
-            raise ValueError('Invalid length {}'.format(length))
+            # Ignore - nothing to apply
+            return
 
         settings = __class__.Settings(setting_or_settings)
 
