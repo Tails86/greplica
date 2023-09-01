@@ -1,7 +1,27 @@
 import setuptools
+import os
 
 with open('README.md', 'r', encoding='utf-8') as fh:
     long_description = fh.read()
+
+def _which(cmd):
+    paths = os.environ.get('PATH', '')
+    paths = paths.split(os.path.pathsep)
+    dirs = [d for d in paths if os.path.isdir(d)]
+    for dir_path in dirs:
+        for item in [f for f in os.listdir(dir_path) if f == cmd]:
+            item_path = os.path.join(dir_path, item)
+            if os.path.isfile(item_path):
+                return item_path
+    return None
+
+# Always have greplica as script
+console_scripts = ['greplica=greplica.__main__:main']
+
+# This isn't perfect, but it's better than nothing
+# Install grep alias script only if grep is not already found in path
+if _which('grep') is None:
+    console_scripts.append('grep=greplica.__main__:main')
 
 setuptools.setup(
     name='greplica',
@@ -38,6 +58,6 @@ setuptools.setup(
         'dev': ['check-manifest']
     },
     entry_points={
-        'console_scripts': ['grep=greplica.__main__:main', 'greplica=greplica.__main__:main']
+        'console_scripts': console_scripts
     }
 )
