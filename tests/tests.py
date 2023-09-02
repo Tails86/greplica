@@ -112,6 +112,7 @@ class CliTests(unittest.TestCase):
         os.chdir(self.old_dir)
 
     def test_match_empty_line(self):
+        os.environ['GREP_COLORS'] = ''
         with patch('greplica.grep.sys.stdout', new = StringIO()), \
             patch('greplica.grep.sys.stdin', FakeStdIn('abc\n\ndef')) \
         :
@@ -137,6 +138,78 @@ class CliTests(unittest.TestCase):
         self.assertEqual(lines[0], 'Simplicity end themselves increasing led day sympathize \x1b[01;31myet\x1b[m.')
         self.assertEqual(lines[1], 'Common indeed garden you his ladies out \x1b[01;31myet\x1b[m.')
         self.assertEqual(lines[2], '')
+
+    def test_search_color_filename_numbers_context(self):
+        os.environ['GREP_COLORS'] = '' # Use default colors
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=always', 'yet', 'file1.txt', 'file2.txt', '-Hnb', '-B', '1'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines,[
+            '\x1b[35mfile2.txt\x1b[m\x1b[36m-\x1b[m\x1b[32m3\x1b[m\x1b[36m-\x1b[m\x1b[32m107\x1b[m\x1b[36m-\x1b[m'
+                'Continual say suspicion provision he neglected sir curiosity unwilling.',
+            '\x1b[35mfile2.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m4\x1b[m\x1b[36m:\x1b[m\x1b[32m179\x1b[m\x1b[36m:\x1b[m'
+                'Simplicity end themselves increasing led day sympathize \x1b[01;31myet\x1b[m.',
+            '\x1b[36m--',
+            '\x1b[m\x1b[35mfile2.txt\x1b[m\x1b[36m-\x1b[m\x1b[32m5\x1b[m\x1b[36m-\x1b[m\x1b[32m240\x1b[m\x1b[36m-\x1b[m'
+                'General windows effects not are drawing man garrets.',
+            '\x1b[35mfile2.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m6\x1b[m\x1b[36m:\x1b[m\x1b[32m293\x1b[m\x1b[36m:\x1b[m'
+                'Common indeed garden you his ladies out \x1b[01;31myet\x1b[m.',
+            ''
+        ])
+
+    def test_search_color_filename_numbers_context_environment(self):
+        os.environ['GREP_COLORS'] = 'ms=03;33:mc=04;34:sl=35:cx=41:rv:fn=42:ln=43:bn=44:se=45:ne'
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=always', 'their', 'file1.txt', '-Hnbv', '-C', '3'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines,[
+            '\x1b[42mfile1.txt\x1b[m\x1b[45m:\x1b[m\x1b[43m1\x1b[m\x1b[45m:\x1b[m\x1b[43m0\x1b[m\x1b[45m:\x1b[m\x1b[41m'
+                'Up am intention on dependent questions oh elsewhere september.\x1b[m',
+            '\x1b[42mfile1.txt\x1b[m\x1b[45m:\x1b[m\x1b[43m2\x1b[m\x1b[45m:\x1b[m\x1b[43m63\x1b[m\x1b[45m:\x1b[m\x1b[41m'
+                'No betrayed pleasure possible jointure we in throwing\x1b[m',
+            '\x1b[42mfile1.txt\x1b[m\x1b[45m:\x1b[m\x1b[43m3\x1b[m\x1b[45m:\x1b[m\x1b[43m117\x1b[m\x1b[45m:\x1b[m\x1b[41m'
+                'And can event rapid any shall woman green.\x1b[m',
+            '\x1b[42mfile1.txt\x1b[m\x1b[45m:\x1b[m\x1b[43m4\x1b[m\x1b[45m:\x1b[m\x1b[43m160\x1b[m\x1b[45m:\x1b[m\x1b[41m'
+                'Hope they dear who .* its bred.\x1b[m',
+            '\x1b[42mfile1.txt\x1b[m\x1b[45m:\x1b[m\x1b[43m5\x1b[m\x1b[45m:\x1b[m\x1b[43m192\x1b[m\x1b[45m:\x1b[m\x1b[41m'
+                'Smiling nothing affixed he carried it clothes calling he no.\x1b[m',
+            '\x1b[42mfile1.txt\x1b[m\x1b[45m:\x1b[m\x1b[43m6\x1b[m\x1b[45m:\x1b[m\x1b[43m253\x1b[m\x1b[45m:\x1b[m\x1b[41m'
+                'Its something disposing departure she favorite tolerably engrossed.\x1b[m',
+            '\x1b[42mfile1.txt\x1b[m\x1b[45m-\x1b[m\x1b[43m7\x1b[m\x1b[45m-\x1b[m\x1b[43m321\x1b[m\x1b[45m-\x1b[m\x1b[35m'
+                'Truth short folly court why she \x1b[35;04;34mtheir\x1b[0;35m balls.\x1b[m',
+            '\x1b[42mfile1.txt\x1b[m\x1b[45m:\x1b[m\x1b[43m8\x1b[m\x1b[45m:\x1b[m\x1b[43m366\x1b[m\x1b[45m:\x1b[m\x1b[41m'
+                'Excellence put unaffected reasonable mrs introduced conviction she.\x1b[m',
+            '\x1b[42mfile1.txt\x1b[m\x1b[45m:\x1b[m\x1b[43m9\x1b[m\x1b[45m:\x1b[m\x1b[43m434\x1b[m\x1b[45m:\x1b[m\x1b[41m'
+                'Nay particular delightful but unpleasant for uncommonly who.\x1b[m',
+            ''
+        ])
+
+    def test_search_color_filename_numbers_context_environment_mt(self):
+        os.environ['GREP_COLORS'] = 'mt=03;33'
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=always', 'their', 'file1.txt', '-Hnbv', '-C', '3'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines,[
+            '\x1b[35mfile1.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m1\x1b[m\x1b[36m:\x1b[m\x1b[32m0\x1b[m\x1b[36m:\x1b[m'
+                'Up am intention on dependent questions oh elsewhere september.',
+            '\x1b[35mfile1.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m2\x1b[m\x1b[36m:\x1b[m\x1b[32m63\x1b[m\x1b[36m:\x1b[m'
+                'No betrayed pleasure possible jointure we in throwing',
+            '\x1b[35mfile1.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m3\x1b[m\x1b[36m:\x1b[m\x1b[32m117\x1b[m\x1b[36m:\x1b[m'
+                'And can event rapid any shall woman green.',
+            '\x1b[35mfile1.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m4\x1b[m\x1b[36m:\x1b[m\x1b[32m160\x1b[m\x1b[36m:\x1b[m'
+                'Hope they dear who .* its bred.',
+            '\x1b[35mfile1.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m5\x1b[m\x1b[36m:\x1b[m\x1b[32m192\x1b[m\x1b[36m:\x1b[m'
+                'Smiling nothing affixed he carried it clothes calling he no.',
+            '\x1b[35mfile1.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m6\x1b[m\x1b[36m:\x1b[m\x1b[32m253\x1b[m\x1b[36m:\x1b[m'
+                'Its something disposing departure she favorite tolerably engrossed.',
+            '\x1b[35mfile1.txt\x1b[m\x1b[36m-\x1b[m\x1b[32m7\x1b[m\x1b[36m-\x1b[m\x1b[32m321\x1b[m\x1b[36m-\x1b[m'
+                'Truth short folly court why she \x1b[03;33mtheir\x1b[m balls.',
+            '\x1b[35mfile1.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m8\x1b[m\x1b[36m:\x1b[m\x1b[32m366\x1b[m\x1b[36m:\x1b[m'
+                'Excellence put unaffected reasonable mrs introduced conviction she.',
+            '\x1b[35mfile1.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m9\x1b[m\x1b[36m:\x1b[m\x1b[32m434\x1b[m\x1b[36m:\x1b[m'
+                'Nay particular delightful but unpleasant for uncommonly who.',
+            ''
+        ])
 
     def test_search_auto_color_and_isatty(self):
         os.environ['GREP_COLORS'] = '' # Use default colors
