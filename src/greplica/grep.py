@@ -1447,14 +1447,19 @@ class GrepArgParser:
                                 help='EXPRESSIONS are "extended" regular expressions.\n'
                                 'In this mode, greplica passes regular expressions directly to Python re '
                                 'without modification. This for the most part matches original "extended" '
-                                'syntax, but be aware that there may be differences.')
+                                'syntax, but be aware that there will be differences.')
         regexp_type.add_argument('-F', '--fixed-strings', action='store_true',
                                 help='EXPRESSIONS are strings')
         regexp_type.add_argument('-G', '--basic-regexp', action='store_true',
                                 help='EXPRESSIONS are "basic" regular expressions.\n'
                                 'In this mode, greplica modifies escaping sequences for characters ?+{}|() '
                                 'before passing to Python re. This for the most part matches original "basic" '
-                                'syntax, but be aware that there may be differences.')
+                                'syntax, but be aware that there will be differences.')
+        regexp_group.add_argument('-P', '--perl-regexp', action='store_true',
+                                help='EXPRESSIONS are "perl" regular expressions.\n'
+                                'In this mode, greplica passes regular expressions directly to Python re '
+                                'without modification. This for the most part matches original "perl" '
+                                'syntax, but be aware that there will be differences.')
         regexp_group.add_argument('-e', '--regexp', dest='expressions_option', metavar='EXPRESSIONS', type=str,
                                 default=None,
                                 help='use EXPRESSIONS for matching')
@@ -1624,7 +1629,7 @@ class GrepArgParser:
         if self._args.file:
             grep_object.add_files(self._expand_cli_paths(self._args.file))
 
-        if self._args.extended_regexp:
+        if self._args.extended_regexp or self._args.perl_regexp:
             grep_object.search_type = Grep.SearchType.EXTENDED_REGEXP
         elif self._args.fixed_strings:
             grep_object.search_type = Grep.SearchType.FIXED_STRINGS

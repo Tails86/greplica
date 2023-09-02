@@ -6,7 +6,6 @@ A grep clone in Python with both CLI and library interfaces, supporting ANSI col
 - The -D, --devices option is not supported and no support is planned. All inputs are handled as
 file streams only, and there is no way to adjust this.
 - Context cannot be given as raw number -NUM.
-- The -P, --perl-regexp option is currently not supported, but support may be added in the future.
 - The -T, --initial-tab option currently doesn't work as well as it does in grep.
 - The Python module `re` is internally used for all regular expressions. The inputted regular
 expression is modified only when basic regular expressions are used. See --help for more
@@ -16,7 +15,6 @@ information.
 
 Future planned work includes the following:
 
-- Try to support perl regex syntax
 - Fix tab option
 
 ## Contribution
@@ -30,16 +28,16 @@ To install, ensure you are connected to the internet and execute: `python3 -m pi
 
 ## CLI Help
 ```
-usage: greplica [-E | -F | -G] [-e EXPRESSIONS] [-f FILE [FILE ...]] [-i] [--no-ignore-case]
-                [-w] [-x] [--end END] [-z] [-s] [-v] [-V] [--help] [-m NUM] [-b] [-n]
-                [--line-buffered] [-H] [-h] [--label LABEL] [-o] [-q] [--binary-files TYPE]
-                [-a] [-I] [-d ACTION] [-r] [-R] [--include GLOB [GLOB ...]]
-                [--exclude GLOB [GLOB ...]] [--exclude-from FILE [FILE ...]]
-                [--exclude-dir GLOB [GLOB ...]] [-L] [-l] [-c] [-T] [-Z] [--result-sep SEP]
-                [--name-num-sep SEP] [--name-byte-sep SEP] [--context-group-sep SEP]
-                [--context-result-sep SEP] [--context-name-num-sep SEP]
-                [--context-name-byte-sep SEP] [-B NUM] [-A NUM] [-C NUM] [--color [WHEN]]
-                [-U]
+usage: greplica [-E | -F | -G] [-P] [-e EXPRESSIONS] [-f FILE [FILE ...]] [-i]
+                [--no-ignore-case] [-w] [-x] [--end END] [-z] [-s] [-v] [-V] [--help]
+                [-m NUM] [-b] [-n] [--line-buffered] [-H] [-h] [--label LABEL] [-o] [-q]
+                [--binary-files TYPE] [-a] [-I] [-d ACTION] [-r] [-R]
+                [--include GLOB [GLOB ...]] [--exclude GLOB [GLOB ...]]
+                [--exclude-from FILE [FILE ...]] [--exclude-dir GLOB [GLOB ...]] [-L] [-l]
+                [-c] [-T] [-Z] [--result-sep SEP] [--name-num-sep SEP] [--name-byte-sep SEP]
+                [--context-group-sep SEP] [--context-result-sep SEP]
+                [--context-name-num-sep SEP] [--context-name-byte-sep SEP] [-B NUM] [-A NUM]
+                [-C NUM] [--color [WHEN]] [-U]
                 [EXPRESSIONS] [FILE [FILE ...]]
 
 Reimplementation of grep command entirely in Python.
@@ -57,12 +55,16 @@ Expression Interpretation:
                         EXPRESSIONS are "extended" regular expressions. In this mode,
                         greplica passes regular expressions directly to Python re without
                         modification. This for the most part matches original "extended"
-                        syntax, but be aware that there may be differences.
+                        syntax, but be aware that there will be differences.
   -F, --fixed-strings   EXPRESSIONS are strings
   -G, --basic-regexp    EXPRESSIONS are "basic" regular expressions. In this mode, greplica
                         modifies escaping sequences for characters ?+{}|() before passing to
                         Python re. This for the most part matches original "basic" syntax,
-                        but be aware that there may be differences.
+                        but be aware that there will be differences.
+  -P, --perl-regexp     EXPRESSIONS are "perl" regular expressions. In this mode, greplica
+                        passes regular expressions directly to Python re without
+                        modification. This for the most part matches original "perl" syntax,
+                        but be aware that there will be differences.
   -e EXPRESSIONS, --regexp EXPRESSIONS
                         use EXPRESSIONS for matching
   -f FILE [FILE ...], --file FILE [FILE ...]
@@ -71,7 +73,8 @@ Expression Interpretation:
   --no-ignore-case      do not ignore case (default)
   -w, --word-regexp     match whole words only
   -x, --line-regexp     match whole lines only
-  --end END             newline character lines will be parsed by (default: \n)
+  --end END             end-of-line character for parsing search files (default: \n); this
+                        does not affect file parsing for -f or --exclude-from
   -z, --null-data       same as --end='\0'
 
 Miscellaneous:
