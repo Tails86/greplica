@@ -34,6 +34,27 @@ Preference imprudence contrasted to remarkably in on.\x00
 Taken now you him trees tears any.
 Her object giving end sister except oppose.'''
 
+test_file3 = '''Looking started he up perhaps against.
+How remainder all additions get elsewhere resources.
+One missed shy wishes supply design answer formed.
+Prevent on present hastily passage an subject in be.
+Be happiness arranging so newspaper defective affection ye.
+Families blessing he in to no daughter.'''
+
+test_file4 = '''Egestas purus viverra accumsan in nisl nisi.
+Amet nisl suscipit adipiscing bibendum est ultricies integer quis auctor.
+Dictum non consectetur a erat nam at.
+Praesent elementum facilisis leo vel fringilla est ullamcorper.
+Mauris augue neque gravida in fermentum.
+Mi sit amet mauris commodo quis imperdiet.
+Amet volutpat consequat mauris nunc.
+Ut diam quam nulla porttitor massa id neque aliquam vestibulum.
+Donec enim diam vulputate ut pharetra sit amet aliquam id.
+Proin libero nunc consequat interdum varius sit amet mattis.
+Facilisis magna etiam tempor orci eu lobortis.
+Lobortis scelerisque fermentum dui faucibus in ornare quam.
+Ut etiam sit amet nisl purus in mollis nunc sed.'''
+
 class FakeStdIn:
     def __init__(self, loaded_str):
         if isinstance(loaded_str, str):
@@ -70,6 +91,10 @@ class CliTests(unittest.TestCase):
             fd.write(test_file1.encode())
         with open(os.path.join(cls.tmpdir.name, "file2.txt"), "wb") as fd:
             fd.write(test_file2.encode())
+        with open(os.path.join(cls.tmpdir.name, "file3.txt"), "wb") as fd:
+            fd.write(test_file3.encode())
+        with open(os.path.join(cls.tmpdir.name, "file4.txt"), "wb") as fd:
+            fd.write(test_file4.encode())
         with open(os.path.join(cls.tmpdir.name, "patterns.txt"), "wb") as fd:
             fd.write(b'glue\nkelp\ntrash\ntree\nneglect')
         with open(os.path.join(cls.tmpdir.name, "globfile.txt"), "wb") as fd:
@@ -221,7 +246,6 @@ class CliTests(unittest.TestCase):
 
     def test_line_regex_no_match(self):
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
-            # Should match "man" but not "woman"
             grep.main(['--color=never', '-xE', 'clothes', 'file1.txt', 'file2.txt'])
             lines = fake_out.getvalue().split('\n')
         self.assertEqual(len(lines), 1)
@@ -229,7 +253,6 @@ class CliTests(unittest.TestCase):
 
     def test_line_regex_match(self):
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
-            # Should match "man" but not "woman"
             grep.main(['--color=never', '-xE', '.*clothes calling he no.', 'file1.txt', 'file2.txt'])
             lines = fake_out.getvalue().split('\n')
         self.assertEqual(len(lines), 2)
@@ -238,7 +261,6 @@ class CliTests(unittest.TestCase):
 
     def test_null_data(self):
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
-            # Should match "man" but not "woman"
             grep.main(['--color=never', '-z', 'trees', 'file1.txt', 'file2.txt'])
             lines = fake_out.getvalue().split('\n')
         self.assertEqual(len(lines), 4)
@@ -249,7 +271,6 @@ class CliTests(unittest.TestCase):
 
     def test_invert_match(self):
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
-            # Should match "man" but not "woman"
             grep.main(['--color=never', '-vF', '.', 'file1.txt', 'file2.txt'])
             lines = fake_out.getvalue().split('\n')
         self.assertEqual(len(lines), 2)
@@ -258,7 +279,6 @@ class CliTests(unittest.TestCase):
 
     def test_max_num(self):
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
-            # Should match "man" but not "woman"
             grep.main(['--color=never', '-F', '.', 'file1.txt', 'file2.txt', '-m', '5'])
             lines = fake_out.getvalue().split('\n')
         # 5 from each file plus trailing newline
@@ -277,7 +297,6 @@ class CliTests(unittest.TestCase):
 
     def test_byte_offset(self):
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
-            # Should match "man" but not "woman"
             grep.main(['--color=never', 'mr', 'file1.txt', 'file2.txt', '-b'])
             lines = fake_out.getvalue().split('\n')
         self.assertEqual(len(lines), 3)
@@ -287,7 +306,6 @@ class CliTests(unittest.TestCase):
 
     def test_line_number(self):
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
-            # Should match "man" but not "woman"
             grep.main(['--color=never', 'mr', 'file1.txt', 'file2.txt', '-n'])
             lines = fake_out.getvalue().split('\n')
         self.assertEqual(len(lines), 3)
@@ -297,7 +315,6 @@ class CliTests(unittest.TestCase):
 
     def test_line_buffered(self):
         with patch('greplica.grep.sys.stdout', new = FakeStdOut(True)) as fake_out:
-            # Should match "man" but not "woman"
             grep.main(['--color=never', '.', 'file1.txt', 'file2.txt', '--line-buffered'])
             lines = fake_out.getvalue().split('\n')
             flush_count = fake_out.flush_count
@@ -306,7 +323,6 @@ class CliTests(unittest.TestCase):
 
     def test_not_line_buffered(self):
         with patch('greplica.grep.sys.stdout', new = FakeStdOut(True)) as fake_out:
-            # Should match "man" but not "woman"
             grep.main(['--color=never', '.', 'file1.txt', 'file2.txt'])
             lines = fake_out.getvalue().split('\n')
             flush_count = fake_out.flush_count
@@ -315,7 +331,6 @@ class CliTests(unittest.TestCase):
 
     def test_with_filename(self):
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
-            # Should match "man" but not "woman"
             grep.main(['--color=never', 'any', 'file1.txt', 'file2.txt', '-H'])
             lines = fake_out.getvalue().split('\n')
         self.assertEqual(len(lines), 3)
@@ -325,7 +340,6 @@ class CliTests(unittest.TestCase):
 
     def test_with_no_filename(self):
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
-            # Should match "man" but not "woman"
             grep.main(['--color=never', 'any', '-r', '-h'])
             lines = fake_out.getvalue().split('\n')
         self.assertEqual(len(lines), 3)
@@ -575,7 +589,169 @@ class CliTests(unittest.TestCase):
             os.chdir(old_cwd)
             tmp_dir.cleanup()
 
+    def test_files_without_match(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', 'any', 'file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', '-L'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, ['file3.txt', 'file4.txt', ''])
 
+    def test_files_with_match(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', 'any', 'file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', '-l'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, ['file1.txt', 'file2.txt', ''])
+
+    def test_print_count(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', 'it', 'file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', 'patterns.txt', '-c'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, ['file1.txt:3', 'file2.txt:4', 'file3.txt:1', 'file4.txt:6', 'patterns.txt:0', ''])
+
+    def test_initial_tab(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', 'sit', 'file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', '-THn'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, [
+            'file2.txt:\t3:\tContinual say suspicion provision he neglected sir curiosity unwilling.',
+            'file4.txt:\t6:\tMi sit amet mauris commodo quis imperdiet.',
+            'file4.txt:\t9:\tDonec enim diam vulputate ut pharetra sit amet aliquam id.',
+            'file4.txt:\t10:\tProin libero nunc consequat interdum varius sit amet mattis.',
+            'file4.txt:\t13:\tUt etiam sit amet nisl purus in mollis nunc sed.',
+            ''
+        ])
+
+    def test_null_sep(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', 'diam', 'file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', '-ZHn'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, [
+            'file4.txt:8:\x00Ut diam quam nulla porttitor massa id neque aliquam vestibulum.',
+            'file4.txt:9:\x00Donec enim diam vulputate ut pharetra sit amet aliquam id.',
+            ''
+        ])
+
+    def test_result_sep(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', 'green', 'file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', '-Hnb', '--result-sep', ' :) '])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, ['file1.txt:3:117 :) And can event rapid any shall woman green.', ''])
+
+    def test_name_num_sep(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', 'green', 'file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', '-Hnb', '--name-num-sep', ' <> '])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, ['file1.txt <> 3:117:And can event rapid any shall woman green.', ''])
+
+    def test_name_byte_sep(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', 'green', 'file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', '-Hnb', '--name-byte-sep', ' | '])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, ['file1.txt:3 | 117:And can event rapid any shall woman green.', ''])
+
+    def test_context_group_sep(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main([
+                '--color=never', 'on', 'file1.txt', '--context-group-sep', '\\\\/\\\\/\\n', '-C', '2'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, [
+            'Up am intention on dependent questions oh elsewhere september.',
+            'No betrayed pleasure possible jointure we in throwing',
+            'And can event rapid any shall woman green.',
+            '\\/\\/',
+            'Its something disposing departure she favorite tolerably engrossed.',
+            'Truth short folly court why she their balls.',
+            'Excellence put unaffected reasonable mrs introduced conviction she.',
+            'Nay particular delightful but unpleasant for uncommonly who.', ''
+        ])
+
+    def test_context_result_sep(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main([
+                '--color=never', 'design', 'file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', '-Hnb',
+                '--context-result-sep', '!', '-C', '2'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, [
+            'file3.txt-1-0!Looking started he up perhaps against.',
+            'file3.txt-2-39!How remainder all additions get elsewhere resources.',
+            'file3.txt:3:92:One missed shy wishes supply design answer formed.',
+            'file3.txt-4-143!Prevent on present hastily passage an subject in be.',
+            'file3.txt-5-196!Be happiness arranging so newspaper defective affection ye.',
+            ''
+        ])
+
+    def test_context_name_num_sep(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main([
+                '--color=never', 'nulla', 'file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', '-Hnb',
+                '--context-name-num-sep', ' % ', '-C', '2'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, [
+            'file4.txt % 6-262-Mi sit amet mauris commodo quis imperdiet.',
+            'file4.txt % 7-305-Amet volutpat consequat mauris nunc.',
+            'file4.txt:8:342:Ut diam quam nulla porttitor massa id neque aliquam vestibulum.',
+            'file4.txt % 9-406-Donec enim diam vulputate ut pharetra sit amet aliquam id.',
+            'file4.txt % 10-465-Proin libero nunc consequat interdum varius sit amet mattis.',
+            ''
+        ])
+
+    def test_context_name_byte_sep(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main([
+                '--color=never', 'suspicion', 'file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', '-Hnb',
+                '--context-name-byte-sep', '()', '-C', '1'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, [
+            'file2.txt-2()58-Put sir she exercise vicinity cheerful wondered.',
+            'file2.txt:3:107:Continual say suspicion provision he neglected sir curiosity unwilling.',
+            'file2.txt-4()179-Simplicity end themselves increasing led day sympathize yet.',
+            ''
+        ])
+
+    def test_before_context(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main([
+                '--color=never', 'massa', 'file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', '-H', '-B', '4'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, [
+            'file4.txt-Praesent elementum facilisis leo vel fringilla est ullamcorper.',
+            'file4.txt-Mauris augue neque gravida in fermentum.',
+            'file4.txt-Mi sit amet mauris commodo quis imperdiet.',
+            'file4.txt-Amet volutpat consequat mauris nunc.',
+            'file4.txt:Ut diam quam nulla porttitor massa id neque aliquam vestibulum.',
+            ''
+        ])
+
+    def test_after_context(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main([
+                '--color=never', 'erat', 'file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', '-H', '-A', '4'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, [
+            'file4.txt:Dictum non consectetur a erat nam at.',
+            'file4.txt-Praesent elementum facilisis leo vel fringilla est ullamcorper.',
+            'file4.txt-Mauris augue neque gravida in fermentum.',
+            'file4.txt-Mi sit amet mauris commodo quis imperdiet.',
+            'file4.txt-Amet volutpat consequat mauris nunc.',
+            ''
+        ])
+
+    def test_strip_cr(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out, \
+            patch('greplica.grep.sys.stdin', FakeStdIn('this file\r\nmust have been made\r\nin windows\r\n')) \
+        :
+            with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+                grep.main(['--color=never', 'file\r'])
+                out = fake_out.getvalue()
+            self.assertEqual(out, f'')
+
+    def test_no_strip_cr(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out, \
+            patch('greplica.grep.sys.stdin', FakeStdIn('this file\r\nmust have been made\r\nin windows\r\n')) \
+        :
+            with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+                grep.main(['--color=never', '-U', 'file\r'])
+                out = fake_out.getvalue()
+            self.assertEqual(out, f'this file\r\n')
 
 if __name__ == '__main__':
     unittest.main()

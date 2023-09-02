@@ -1157,6 +1157,7 @@ class Grep:
             self.overflow_detected = False
             self.binary_detected = False
             self.num_matches = 0
+            self.something_printed = False
             self.byte_offset = 0
             self.print_fn = None
             self.binary_parse_function = Grep.BinaryParseFunction.PRINT_ERROR
@@ -1283,6 +1284,7 @@ class Grep:
                 })
                 self.print_fn(line_format.format(**self.line_data_dict))
 
+            self.something_printed = True
 
         def parse_complete(self, is_match):
             '''
@@ -1301,7 +1303,7 @@ class Grep:
                 and not self.binary_detected
             ):
                 # Print before context
-                if self.current_before_context:
+                if self.current_before_context and self.something_printed:
                     self.print_fn(self.context_sep, end='')
                 for i, before_line in enumerate(self.current_before_context):
                     line_num = self.line_num - len(self.current_before_context) + i
