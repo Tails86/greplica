@@ -31,7 +31,7 @@ import re
 import fnmatch
 import glob
 
-__version__ = '0.9.13'
+__version__ = '1.0.0'
 PACKAGE_NAME = 'greplica'
 
 class BinaryDetectedException(Exception):

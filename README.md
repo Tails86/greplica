@@ -14,12 +14,6 @@ information.
 
 ## Development Roadmap
 
-This module is considered "feature complete" as far as features planned for initial release, but
-this is still in "beta" testing. The following steps are left in order to harden the implementation
-before releasing 1.0.0:
-
-- Add CI workflow
-
 Future planned work includes the following:
 
 - Try to support perl regex syntax
