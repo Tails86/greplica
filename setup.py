@@ -1,6 +1,8 @@
 import setuptools
 import os
 
+# This project is only packaged as sdist so that this setup.py script runs at the target
+
 with open('README.md', 'r', encoding='utf-8') as fh:
     long_description = fh.read()
 
@@ -11,7 +13,7 @@ def _which(cmd):
     for dir_path in dirs:
         for item in [f for f in os.listdir(dir_path) if f == cmd]:
             item_path = os.path.join(dir_path, item)
-            if os.path.isfile(item_path):
+            if os.path.isfile(item_path) and os.access(item_path, os.X_OK):
                 return item_path
     return None
 

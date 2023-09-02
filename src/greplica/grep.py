@@ -30,6 +30,7 @@ import enum
 import re
 import fnmatch
 import glob
+from io import StringIO
 
 __version__ = '1.0.0'
 PACKAGE_NAME = 'greplica'
@@ -127,11 +128,12 @@ class AutoInputFileIterable(FileIterable):
     def eof(self):
         return (self._fp is None)
 
-class StdinIterable(FileIterable):
+class InputStreamIterable(FileIterable):
     '''
-    Reads from stdin and returns lines as bytes or strings.
+    Reads from existing file and returns lines as bytes or strings.
     '''
-    def __init__(self, as_bytes=True, end='\n', label='(standard input)'):
+    def __init__(self, in_file=sys.stdin, as_bytes=True, end='\n', label='(standard input)'):
+        self._in_file = in_file
         self._as_bytes = as_bytes
         self._end = end
         self._label = label
@@ -152,7 +154,7 @@ class StdinIterable(FileIterable):
         end = b''
         end_len = len(self._end)
         while end != self._end:
-            last_b = sys.stdin.buffer.read(1)
+            last_b = self._in_file.buffer.read(1)
             if last_b:
                 if len(b) < __class__.LINE_BYTE_LIMIT:
                     b += last_b
@@ -592,11 +594,6 @@ class Grep:
         BASIC_REGEXP = enum.auto()
         EXTENDED_REGEXP = enum.auto()
 
-    class ColorOutputMode(Enum):
-        AUTO = enum.auto()
-        ALWAYS = enum.auto()
-        NEVER = enum.auto()
-
     class Directory(Enum):
         READ = enum.auto()
         RECURSE = enum.auto()
@@ -608,93 +605,157 @@ class Grep:
         IGNORE_DECODE_ERRORS = enum.auto()
         SKIP = enum.auto()
 
-    def __init__(self, print_file=None):
+    class NullFileWriter(StringIO):
+        ''' Fake out a file interface, and do nothing on write'''
+        def write(self, __s: str) -> int:
+            pass
+
+        def writelines(self, __lines) -> None:
+            pass
+
+        def flush(self) -> None:
+            pass
+
+        def isatty(self) -> bool:
+            return False
+
+    def __init__(self, out_file=None, err_file=None, default_in_file=None):
         '''
         Initializes Grep
-        Inputs: print_file - a file object to pass to print() as 'file' or None for stdout
+        Inputs: out_file - a file object to pass to print() as 'file' for regular messages.
+                           This should be set to sys.stdout if writing to terminal is desired.
+                           Writing to file is skipped when this is set to None. (default: None)
+                err_file - a file object to pass to print() as 'file' for error messages.
+                           This should be set to sys.stderr if writing to terminal is desired.
+                           Writing to file is skipped when this is set to None. (default: None)
+                default_in_file - default input file stream used when no files added.
+                           This should be set to sys.stdin if reading from terminal is desired by default.
+                           An exception will be caused on execute() if this is None and no files added.
+                           (default: None)
         '''
         self.reset()
-        self._print_file = print_file
+
+        if out_file is None:
+            self._out_file = __class__.NullFileWriter()
+        else:
+            self._out_file = out_file
+
+        if err_file is None:
+            self._err_file = __class__.NullFileWriter()
+        else:
+            self._err_file = err_file
+
+        self._default_in_file = default_in_file
 
     def reset(self):
         '''
         Resets all Grep state values except for the print file.
         '''
-        self._expressions = []
-        self._files = []
-        self._file_include_globs = []
-        self._file_exclude_globs = []
-        self._dir_exclude_globs = []
-        self._search_type = __class__.SearchType.BASIC_REGEXP
-        self._ignore_case = False
-        self._word_regexp = False
-        self._line_regexp = False
-        self._no_messages = False
-        self._invert_match = False
-        self._max_count = None
-        self._output_line_numbers = False
-        self._output_file_name = False
-        self._output_byte_offset = False
-        self._line_buffered = False
-        self._end = b'\n'
-        self._results_sep = ':'
-        self._name_num_sep = ':'
-        self._name_byte_sep = ':'
-        self._context_sep = '--\n'
-        self._context_results_sep = '-'
-        self._context_name_num_sep = '-'
-        self._context_name_byte_sep = '-'
-        self._color_output_mode = __class__.ColorOutputMode.AUTO
-        self._directory_handling_type = __class__.Directory.READ
-        self._label = '(standard input)'
-        self._quiet = False
-        self._only_matching = False
-        self._binary_parse_function = __class__.BinaryParseFunction.PRINT_ERROR
-        self._strip_cr = True
-        self._before_context_count = 0
-        self._after_context_count = 0
-        self._print_matching_files_only = False
-        self._print_non_matching_files_only = False
-        self._print_count_only = False
+        self._expressions:list = []
+        self._files:list = []
+        self._file_include_globs:list = []
+        self._file_exclude_globs:list = []
+        self._dir_exclude_globs:list = []
+        # Grep.SearchType: The search type which sets how expressions are parsed.
+        self.search_type:__class__.SearchType = __class__.SearchType.BASIC_REGEXP
+        # Boolean: when true, expression's case is ignored during search
+        self.ignore_case:bool = False
+        # Boolean: when true, regex search is performed using pattern \\b{expr}\\b
+        self.word_regexp:bool = False
+        # Boolean: when true, line regex search is used
+        self.line_regexp:bool = False
+        # Boolean: when true, no error messages are printed
+        self.no_messages:bool = False
+        # Boolean: when true, matching lines are those that don't match expression
+        self.invert_match:bool = False
+        # None or int: when set, this is the maximum number of matching lines printed for each file
+        self.max_count:int = None
+        # Boolean: when true, line number of match is printed before result
+        self.output_line_numbers:bool = False
+        # Boolean: when true, file name is printed before result
+        self.output_file_name:bool = False
+        # Boolean: when true, byte offset is printed before result
+        self.output_byte_offset:bool = False
+        # Boolean: when true, each printed line is flushed before proceeding
+        self.line_buffered:bool = False
+        # bytes: the sequence of bytes expected at the end of each line
+        self._end:bytes = b'\n'
+        # String: the string printed after header information and before line contents
+        self.results_sep:str = ':'
+        # String: the string printed before line number if both file name and line number are printed
+        self.name_num_sep:str = ':'
+        # String: the string printed before byte offset value if byte offset as well as either file
+        #         name or line number is printed.
+        self.name_byte_sep:str = ':'
+        # String: the string printed between each context group
+        self.context_sep:str = '--\n'
+        # String: the string printed after header information and before context line contents
+        self.context_results_sep:str = '-'
+        # String: the string printed before context line number if both file name and line number are printed
+        self.context_name_num_sep:str = '-'
+        # String: the string printed before context byte offset value if byte offset as well as either
+        #         file name or line number is printed.
+        self.context_name_byte_sep:str = '-'
+        # Boolean: output color ANSI escape sequences in output text when True
+        self.output_color:bool = False
+        # Grep.Directory: sets how directories are handled when they are included in file list
+        self.directory_handling_type:__class__.Directory = __class__.Directory.READ
+        # String: the label to print when output_file_name is true and stdin is parsed
+        self.label:str = '(standard input)'
+        # Boolean: when true, normal output is not printed
+        self.quiet:bool = False
+        # Boolean: when true, only the matching contents are printed for each line
+        self.only_matching:bool = False
+        # Grep.BinaryParseFunction: sets how binary files are handled
+        self.binary_parse_function:__class__.BinaryParseFunction = __class__.BinaryParseFunction.PRINT_ERROR
+        # Boolean: when true, CR are stripped from the end of every line when found
+        self.strip_cr:bool = True
+        # Integer: number of lines of context to print before a match
+        self.before_context_count:int = 0
+        # Integer: number of lines of context to print after a match
+        self.after_context_count:int = 0
+        # Boolean: when true, only the file name of matching files are printed
+        self.print_matching_files_only:bool = False
+        # Boolean: when true, only the file name of non-matching files are printed
+        self.print_non_matching_files_only:bool = False
+        # Boolean: when true, only count of number of matches for each file is printed
+        self.print_count_only:bool = False
+        # Dictionary: Contains grep color information
+        # By default, this reads from environment to generate the dict - set to {} to use defaults
+        self.grep_color_dict:dict = __class__._generate_color_dict()
 
-    def add_expression(self, expression_or_expressions):
+    def add_expressions(self, *args):
         '''
         Adds a single expression or list of expressions that Grep will search for in selected files.
-        Inputs: expression_or_expressions - must be of type list or str
+        Inputs: all arguments must be list of strings or string - each string is an expression
         '''
-        if isinstance(expression_or_expressions, list):
-            self._expressions.extend(expression_or_expressions)
-        elif isinstance(expression_or_expressions, str):
-            self._expressions.append(expression_or_expressions)
-        else:
-            raise TypeError('Invalid type ({}) for expression_or_expressions'
-                            .format(type(expression_or_expressions)))
-
-    def add_expressions(self, expression_or_expressions):
-        '''
-        Adds a single expression or list of expressions that Grep will search for in selected files.
-        Inputs: expression_or_expressions - must be of type list or str
-        '''
-        self.add_expression(expression_or_expressions)
+        for arg in args:
+            if isinstance(arg, list):
+                self._expressions.extend(arg)
+            elif isinstance(arg, str):
+                self._expressions.append(arg)
+            else:
+                raise TypeError('Invalid type ({}) for expression'.format(type(arg)))
 
     def clear_expressions(self):
         '''
-        Clears all expressions that were previously set by add_expression().
+        Clears all expressions that were previously set by add_expressions().
         '''
         self._expressions.clear()
 
-    def add_files(self, file_or_files):
+    def add_files(self, *args):
         '''
         Adds a single file or list of files that Grep will crawl through. Each entry must be a path
         to a file or directory. Directories are handled based on value of directory_handling_type.
-        Inputs: file_or_files - must be of type list or str
+        Inputs: all arguments must be list of strings or string - each string is a file path
         '''
-        if isinstance(file_or_files, list):
-            self._files.extend(file_or_files)
-        elif isinstance(file_or_files, str):
-            self._files.append(file_or_files)
-        else:
-            raise TypeError('Invalid type ({}) for file_or_files'.format(type(file_or_files)))
+        for arg in args:
+            if isinstance(arg, list):
+                self._files.extend(arg)
+            elif isinstance(arg, str):
+                self._files.append(arg)
+            else:
+                raise TypeError('Invalid type ({}) for file path'.format(type(arg)))
 
     def clear_files(self):
         '''
@@ -736,255 +797,25 @@ class Grep:
         self._dir_exclude_globs = []
 
     @property
-    def search_type(self):
+    def out_file(self):
         '''
-        Grep.SearchType: The search type which sets how expressions are parsed.
+        The output file, if any (to be passed to print())
         '''
-        return self._search_type
-
-    @search_type.setter
-    def search_type(self, search_type):
-        if not isinstance(search_type, __class__.SearchType):
-            raise TypeError('Invalid type ({}) for search_type'.format(type(search_type)))
-        self._search_type = search_type
+        return self._out_file
 
     @property
-    def ignore_case(self):
+    def err_file(self):
         '''
-        Boolean: when true, expression's case is ignored during search
+        The error file, if any (to be passed to print() on errors)
         '''
-        return self._ignore_case
-
-    @ignore_case.setter
-    def ignore_case(self, ignore_case):
-        self._ignore_case = ignore_case
+        return self._err_file
 
     @property
-    def word_regexp(self):
+    def default_in_file(self):
         '''
-        Boolean: when true, regex search is performed using pattern \\b{expr}\\b
+        The default input file, if any (to be used when no files set)
         '''
-        return self._word_regexp
-
-    @word_regexp.setter
-    def word_regexp(self, word_regexp):
-        self._word_regexp = word_regexp
-
-    @property
-    def line_regexp(self):
-        '''
-        Boolean: when true, line regex search is used
-        '''
-        return self._line_regexp
-
-    @line_regexp.setter
-    def line_regexp(self, line_regexp):
-        self._line_regexp = line_regexp
-
-    @property
-    def no_messages(self):
-        '''
-        Boolean: when true, no error messages are printed
-        '''
-        return self._no_messages
-
-    @no_messages.setter
-    def no_messages(self, no_messages):
-        self._no_messages = no_messages
-
-    @property
-    def invert_match(self):
-        '''
-        Boolean: when true, matching lines are those that don't match expression
-        '''
-        return self._invert_match
-
-    @invert_match.setter
-    def invert_match(self, invert_match):
-        self._invert_match = invert_match
-
-    @property
-    def max_count(self):
-        '''
-        None or int: when set, this is the maximum number of matching lines printed for each file
-        '''
-        return self._max_count
-
-    @max_count.setter
-    def max_count(self, max_count):
-        self._max_count = max_count
-
-    @property
-    def output_line_numbers(self):
-        '''
-        Boolean: when true, line number of match is printed before result
-        '''
-        return self._output_line_numbers
-
-    @output_line_numbers.setter
-    def output_line_numbers(self, output_line_numbers):
-        self._output_line_numbers = output_line_numbers
-
-    @property
-    def output_file_name(self):
-        '''
-        Boolean: when true, file name is printed before result
-        '''
-        return self._output_file_name
-
-    @output_file_name.setter
-    def output_file_name(self, output_file_name):
-        self._output_file_name = output_file_name
-
-    @property
-    def output_byte_offset(self):
-        '''
-        Boolean: when true, byte offset is printed before result
-        '''
-        return self._output_byte_offset
-
-    @output_byte_offset.setter
-    def output_byte_offset(self, output_byte_offset):
-        self._output_byte_offset = output_byte_offset
-
-    @property
-    def line_buffered(self):
-        '''
-        Boolean: when true, each printed line is flushed before proceeding
-        '''
-        return self._line_buffered
-
-    @line_buffered.setter
-    def line_buffered(self, line_buffered):
-        self._line_buffered = line_buffered
-
-    @property
-    def label(self):
-        '''
-        String: the label to print when output_file_name is true and stdin is parsed
-        '''
-        return self._label
-
-    @label.setter
-    def label(self, label):
-        self._label = label
-
-    @property
-    def quiet(self):
-        '''
-        Boolean: when true, normal output is not printed
-        '''
-        return self._quiet
-
-    @quiet.setter
-    def quiet(self, quiet):
-        self._quiet = quiet
-
-    @property
-    def results_sep(self):
-        '''
-        String: the string printed after header information and before line contents
-        '''
-        return self._results_sep
-
-    @results_sep.setter
-    def results_sep(self, results_sep):
-        if not isinstance(results_sep, str):
-            raise TypeError('Invalid type ({}) for results_sep'.format(type(results_sep)))
-        self._results_sep = results_sep
-
-    @property
-    def name_num_sep(self):
-        '''
-        String: the string printed before line number if both file name and line number are printed
-        '''
-        return self._name_num_sep
-
-    @name_num_sep.setter
-    def name_num_sep(self, name_num_sep):
-        if not isinstance(name_num_sep, str):
-            raise TypeError('Invalid type ({}) for name_num_sep'.format(type(name_num_sep)))
-        self._name_num_sep = name_num_sep
-
-    @property
-    def name_byte_sep(self):
-        '''
-        String: the string printed before byte offset value if byte offset as well as either file
-        name or line number is printed.
-        '''
-        return self._name_byte_sep
-
-    @name_byte_sep.setter
-    def name_byte_sep(self, name_byte_sep):
-        if not isinstance(name_byte_sep, str):
-            raise TypeError('Invalid type ({}) for name_byte_sep'.format(type(name_byte_sep)))
-        self._name_byte_sep = name_byte_sep
-
-    @property
-    def context_sep(self):
-        '''
-        String: the string printed between each context group
-        '''
-        return self._context_sep
-
-    @context_sep.setter
-    def context_sep(self, context_sep):
-        if not isinstance(context_sep, str):
-            raise TypeError('Invalid type ({}) for context_sep'.format(type(context_sep)))
-        self._context_sep = context_sep
-
-    @property
-    def context_results_sep(self):
-        '''
-        String: the string printed after header information and before context line contents
-        '''
-        return self._context_results_sep
-
-    @context_results_sep.setter
-    def context_results_sep(self, context_results_sep):
-        if not isinstance(context_results_sep, str):
-            raise TypeError('Invalid type ({}) for context_results_sep'.format(type(context_results_sep)))
-        self._context_results_sep = context_results_sep
-
-    @property
-    def context_name_num_sep(self):
-        '''
-        String: the string printed before context line number if both file name and line number are printed
-        '''
-        return self._context_name_num_sep
-
-    @context_name_num_sep.setter
-    def context_name_num_sep(self, context_name_num_sep):
-        if not isinstance(context_name_num_sep, str):
-            raise TypeError('Invalid type ({}) for context_name_num_sep'.format(type(context_name_num_sep)))
-        self._context_name_num_sep = context_name_num_sep
-
-    @property
-    def context_name_byte_sep(self):
-        '''
-        String: the string printed before context byte offset value if byte offset as well as either
-        file name or line number is printed.
-        '''
-        return self._context_name_byte_sep
-
-    @context_name_byte_sep.setter
-    def context_name_byte_sep(self, context_name_byte_sep):
-        if not isinstance(context_name_byte_sep, str):
-            raise TypeError('Invalid type ({}) for context_name_byte_sep'.format(type(context_name_byte_sep)))
-        self._context_name_byte_sep = context_name_byte_sep
-
-    @property
-    def color_output_mode(self):
-        '''
-        Grep.ColorOutputMode: sets when ANSI escape codes are printed
-        '''
-        return self._color_output_mode
-
-    @color_output_mode.setter
-    def color_output_mode(self, color_output_mode):
-        if not isinstance(color_output_mode, __class__.ColorOutputMode):
-            raise TypeError('Invalid type ({}) for color_output_mode'.format(type(color_output_mode)))
-        self._color_output_mode = color_output_mode
+        return self._default_in_file
 
     @property
     def end(self):
@@ -995,112 +826,10 @@ class Grep:
 
     @end.setter
     def end(self, end):
+        # Force end to be of type bytes if str given
         if isinstance(end, str):
             end = end.encode()
         self._end = end
-
-    @property
-    def directory_handling_type(self):
-        '''
-        Grep.Directory: sets how directories are handled when they are included in file list
-        '''
-        return self._directory_handling_type
-
-    @directory_handling_type.setter
-    def directory_handling_type(self, directory_handling_type):
-        if not isinstance(directory_handling_type, __class__.Directory):
-            raise TypeError('Invalid type ({}) for directory_handling_type'.format(type(directory_handling_type)))
-        self._directory_handling_type = directory_handling_type
-
-    @property
-    def only_matching(self):
-        '''
-        Boolean: when true, only the matching contents are printed for each line
-        '''
-        return self._only_matching
-
-    @only_matching.setter
-    def only_matching(self, only_matching):
-        self._only_matching = only_matching
-
-    @property
-    def binary_parse_function(self):
-        '''
-        Grep.BinaryParseFunction: sets how binary files are handled
-        '''
-        return self._binary_parse_function
-
-    @binary_parse_function.setter
-    def binary_parse_function(self, binary_parse_function):
-        if not isinstance(binary_parse_function, __class__.BinaryParseFunction):
-            raise TypeError('Invalid type ({}) for binary_parse_function'.format(type(binary_parse_function)))
-        self._binary_parse_function = binary_parse_function
-
-    @property
-    def strip_cr(self):
-        '''
-        Boolean: when true, CR are stripped from the end of every line when found
-        '''
-        return self._strip_cr
-
-    @strip_cr.setter
-    def strip_cr(self, strip_cr):
-        self._strip_cr = strip_cr
-
-    @property
-    def before_context_count(self):
-        '''
-        Integer: number of lines of context to print before a match
-        '''
-        return self._before_context_count
-
-    @before_context_count.setter
-    def before_context_count(self, before_context_count):
-        self._before_context_count = before_context_count
-
-    @property
-    def after_context_count(self):
-        '''
-        Integer: number of lines of context to print after a match
-        '''
-        return self._after_context_count
-
-    @after_context_count.setter
-    def after_context_count(self, after_context_count):
-        self._after_context_count = after_context_count
-
-    @property
-    def print_matching_files_only(self):
-        '''
-        Boolean: when true, only the file name of matching files are printed
-        '''
-        return self._print_matching_files_only
-
-    @print_matching_files_only.setter
-    def print_matching_files_only(self, print_matching_files_only):
-        self._print_matching_files_only = print_matching_files_only
-
-    @property
-    def print_non_matching_files_only(self):
-        '''
-        Boolean: when true, only the file name of non-matching files are printed
-        '''
-        return self._print_non_matching_files_only
-
-    @print_non_matching_files_only.setter
-    def print_non_matching_files_only(self, print_non_matching_files_only):
-        self._print_non_matching_files_only = print_non_matching_files_only
-
-    @property
-    def print_count_only(self):
-        '''
-        Boolean: when true, only count of number of matches for each file is printed
-        '''
-        return self._print_count_only
-
-    @print_count_only.setter
-    def print_count_only(self, print_count_only):
-        self._print_count_only = print_count_only
 
     @staticmethod
     def _generate_color_dict():
@@ -1159,7 +888,11 @@ class Grep:
             self.num_matches = 0
             self.something_printed = False
             self.byte_offset = 0
-            self.print_fn = None
+            self.line_print_fn = None
+            self.info_print_fn = None
+            self.error_print_fn = None
+            self.save_lines = False
+            self.printed_data = {'lines':[], 'info':[], 'errors':[]}
             self.binary_parse_function = Grep.BinaryParseFunction.PRINT_ERROR
             self.strip_cr = True
             self.before_context_count = 0
@@ -1221,7 +954,7 @@ class Grep:
                         status_msgs += ' and'
                     status_msgs += ' line overflow detected'
                 if status_msgs:
-                    self.print_fn('{filename}: {status_msgs}'
+                    self.print_line('{filename}: {status_msgs}'
                                   .format(status_msgs=status_msgs, **self.line_data_dict))
                 return False
 
@@ -1265,7 +998,25 @@ class Grep:
 
             return True
 
-        def _print_line(self, line_format, formatted_line, line_num, byte_offset, line_slices=[]):
+        def print_line(self, line, end=None):
+            if self.line_print_fn:
+                self.line_print_fn(line, end=end)
+                if self.save_lines:
+                    self.printed_data['lines'].append(line)
+
+        def print_info(self, info, end=None):
+            if self.info_print_fn:
+                self.info_print_fn(info, end=end)
+                if self.save_lines:
+                    self.printed_data['info'].append(info)
+
+        def print_error(self, error, end=None):
+            if self.error_print_fn:
+                self.error_print_fn(error, end=end)
+                if self.save_lines:
+                    self.printed_data['errors'].append(error)
+
+        def _format_and_print_line(self, line_format, formatted_line, line_num, byte_offset, line_slices=[]):
             if not line_slices:
                 # Default to printing the entire line
                 line_slices = [slice(0, None)]
@@ -1282,7 +1033,7 @@ class Grep:
                     'byte_offset': AnsiString(str(byte_offset + slice_byte_offset)),
                     'line': formatted_line[line_slice]
                 })
-                self.print_fn(line_format.format(**self.line_data_dict))
+                self.print_line(line_format.format(**self.line_data_dict))
 
             self.something_printed = True
 
@@ -1304,11 +1055,11 @@ class Grep:
             ):
                 # Print before context
                 if self.current_before_context and self.something_printed:
-                    self.print_fn(self.context_sep, end='')
+                    self.print_line(self.context_sep, end='')
                 for i, before_line in enumerate(self.current_before_context):
                     line_num = self.line_num - len(self.current_before_context) + i
                     byte_offset = self.current_before_byte_offsets[i]
-                    self._print_line(
+                    self._format_and_print_line(
                         self.context_line_format,
                         before_line,
                         line_num,
@@ -1318,7 +1069,7 @@ class Grep:
                 self.current_before_byte_offsets = []
 
                 # Print the line
-                self._print_line(
+                self._format_and_print_line(
                     self.line_format if is_match else self.context_line_format,
                     self.formatted_line,
                     self.line_num,
@@ -1348,14 +1099,14 @@ class Grep:
         line_format = ''
 
         output_file_name_only = (
-            self._print_count_only
-            or self._print_matching_files_only
-            or self._print_non_matching_files_only
+            self.print_count_only
+            or self.print_matching_files_only
+            or self.print_non_matching_files_only
         )
-        output_file_name = (self._output_file_name or output_file_name_only)
-        output_line_numbers = (self._output_line_numbers and not output_file_name_only)
-        output_byte_offset = (self._output_byte_offset and not output_file_name_only)
-        output_line = (not self._print_matching_files_only and not self._print_non_matching_files_only)
+        output_file_name = (self.output_file_name or output_file_name_only)
+        output_line_numbers = (self.output_line_numbers and not output_file_name_only)
+        output_byte_offset = (self.output_byte_offset and not output_file_name_only)
+        output_line = (not self.print_matching_files_only and not self.print_non_matching_files_only)
 
         if output_file_name:
             line_format += '{filename'
@@ -1391,31 +1142,23 @@ class Grep:
             line_format += '{line}'
         return line_format
 
-    def _init_line_parsing_data(self):
+    def _init_line_parsing_data(self, return_matches:bool):
         '''
         Initializes line parsing data which makes up the local running state of Grep.execute().
         '''
         data = __class__.LineParsingData()
 
-        data.ignore_case = self._ignore_case
-        data.line_ending = self._end
-        data.binary_parse_function = self._binary_parse_function
-        data.strip_cr = self._strip_cr
+        data.save_lines = return_matches
+        data.ignore_case = self.ignore_case
+        data.line_ending = self.end
+        data.binary_parse_function = self.binary_parse_function
+        data.strip_cr = self.strip_cr
+        data.color_enabled = self.output_color
 
         # Only apply context values if only_matching is not set
-        if not self._only_matching:
-            data.before_context_count = self._before_context_count
-            data.after_context_count = self._after_context_count
-
-        if self._color_output_mode == Grep.ColorOutputMode.ALWAYS:
-            data.color_enabled = True
-        elif self._color_output_mode == Grep.ColorOutputMode.AUTO:
-            if self._print_file is None:
-                data.color_enabled = sys.stdout.isatty()
-            else:
-                data.color_enabled = False
-        else:
-            data.color_enabled = False
+        if not self.only_matching:
+            data.before_context_count = self.before_context_count
+            data.after_context_count = self.after_context_count
 
         if not self._files:
             if (
@@ -1423,42 +1166,45 @@ class Grep:
                 or self.directory_handling_type == __class__.Directory.RECURSE_LINKS
             ):
                 data.files = [self._make_file_iterable('.')]
+            elif self._default_in_file is not None:
+                data.files = [InputStreamIterable(self._default_in_file, True, self.end, self.label)]
             else:
-                data.files = [StdinIterable(True, self.end, self._label)]
+                raise ValueError('No files provided')
         else:
             data.files = [self._make_file_iterable(f) for f in self._files]
 
         data.expressions = self._expressions
 
         for i in range(len(data.expressions)):
-            if self._search_type == __class__.SearchType.FIXED_STRINGS:
-                if self._ignore_case:
+            if self.search_type == __class__.SearchType.FIXED_STRINGS:
+                if self.ignore_case:
                     data.expressions[i] = data.expressions[i].lower()
-            elif self._search_type == __class__.SearchType.BASIC_REGEXP:
+            elif self.search_type == __class__.SearchType.BASIC_REGEXP:
                 # Transform basic regex string to extended
                 # The only difference with basic is that escaping of some characters is inverted
                 data.expressions[i] = _expression_escape_invert(data.expressions[i], '?+{}|()')
 
-            if self._word_regexp:
-                if self._search_type == __class__.SearchType.FIXED_STRINGS:
+            if self.word_regexp:
+                if self.search_type == __class__.SearchType.FIXED_STRINGS:
                     # Transform expression into regular expression
                     data.expressions[i] = r"\b" + re.escape(data.expressions[i]) + r"\b"
                 else:
                     data.expressions[i] = r"\b" + data.expressions[i] + r"\b"
-            elif self._line_regexp:
-                if self._search_type == __class__.SearchType.FIXED_STRINGS:
+            elif self.line_regexp:
+                if self.search_type == __class__.SearchType.FIXED_STRINGS:
                     # Transform expression into regular expression
                     data.expressions[i] = re.escape(data.expressions[i])
             data.expressions[i] = data.expressions[i].encode()
 
-        if self._word_regexp or self._line_regexp:
+        if self.word_regexp or self.line_regexp:
             # Force to regex parse
             data.fixed_string_parse = False
         else:
-            data.fixed_string_parse = (self._search_type == __class__.SearchType.FIXED_STRINGS)
+            data.fixed_string_parse = (self.search_type == __class__.SearchType.FIXED_STRINGS)
 
         if data.color_enabled:
-            grep_color_dict = __class__._generate_color_dict()
+            grep_color_dict = dict(DEFAULT_GREP_ANSI_COLORS)
+            grep_color_dict.update(self.grep_color_dict)
             data.matching_color = grep_color_dict['mt']
             if data.matching_color is None:
                 if self.invert_match:
@@ -1466,46 +1212,58 @@ class Grep:
                     data.matching_color = grep_color_dict['mc']
                 else:
                     data.matching_color = grep_color_dict['ms']
-            if grep_color_dict['rv'] and self._invert_match:
+            if grep_color_dict['rv'] and self.invert_match:
                 data.matching_line_color = grep_color_dict['cx']
                 data.context_line_color = grep_color_dict['sl']
             else:
                 data.matching_line_color = grep_color_dict['sl']
                 data.context_line_color = grep_color_dict['cx']
-            data.context_sep = str(AnsiString(self._context_sep, grep_color_dict['se']))
+            data.context_sep = str(AnsiString(self.context_sep, grep_color_dict['se']))
         else:
             grep_color_dict = None
             data.matching_color = None
             data.matching_line_color = None
             data.context_line_color = None
-            data.context_sep = self._context_sep
+            data.context_sep = self.context_sep
 
         data.line_format = self._generate_line_format(
             grep_color_dict,
-            self._name_num_sep,
-            self._name_byte_sep,
-            self._results_sep
+            self.name_num_sep,
+            self.name_byte_sep,
+            self.results_sep
         )
 
         data.context_line_format = self._generate_line_format(
             grep_color_dict,
-            self._context_name_num_sep,
-            self._context_name_byte_sep,
-            self._context_results_sep
+            self.context_name_num_sep,
+            self.context_name_byte_sep,
+            self.context_results_sep
         )
 
         if (
-            not self._quiet
-            and not self._print_count_only
-            and not self._print_matching_files_only
-            and not self._print_non_matching_files_only
+            not self.quiet
+            and not self.print_count_only
+            and not self.print_matching_files_only
+            and not self.print_non_matching_files_only
         ):
-            data.print_fn = lambda line, end=None : print(line, file=self._print_file, flush=self._line_buffered, end=end)
+            data.line_print_fn = lambda line, end=None : print(line, file=self._out_file, flush=self.line_buffered, end=end)
         else:
-            # Do nothing on print
-            data.print_fn = lambda line, end=None: None
+            # Do nothing on line print
+            data.line_print_fn = None
 
-        if self._print_count_only:
+        if not self.quiet:
+            data.info_print_fn = lambda line, end=None : print(line, file=self._out_file, flush=self.line_buffered, end=end)
+        else:
+            # Do nothing on info print
+            data.info_print_fn = None
+
+        if not self.no_messages:
+            data.error_print_fn = lambda line, end=None : print(line, file=self._err_file, flush=self.line_buffered, end=end)
+        else:
+            # Do nothing on error print
+            data.error_print_fn = None
+
+        if self.print_count_only:
             # Force binary mode to ignore decode errors so it continues to count
             self.binary_parse_function = __class__.BinaryParseFunction.IGNORE_DECODE_ERRORS
 
@@ -1538,9 +1296,9 @@ class Grep:
             else:
                 # Regular expression matching
                 flags = 0
-                if self._ignore_case:
+                if self.ignore_case:
                     flags = re.IGNORECASE
-                if self._line_regexp:
+                if self.line_regexp:
                     m = re.fullmatch(expression, data.line, flags)
                     if m is not None:
                         match_found = True
@@ -1556,7 +1314,7 @@ class Grep:
                             data.formatted_line.apply_formatting_for_match(data.matching_color, m)
                         if self.only_matching:
                             data.line_slices.append(slice(m.start(0), m.end(0)))
-        if self._invert_match:
+        if self.invert_match:
             match_found = not match_found
         data.parse_complete(match_found)
         return match_found
@@ -1588,33 +1346,24 @@ class Grep:
             data.set_file(file)
         except EnvironmentError as ex:
             # This occurs if permission is denied
-            if not self._no_messages:
-                print('{}: {}'.format(PACKAGE_NAME, str(ex)), file=sys.stderr)
+            data.print_error('{}: {}'.format(PACKAGE_NAME, str(ex)))
         else:
             try:
-                while data.next_line() and (self._max_count is None or data.num_matches < self._max_count):
+                while data.next_line() and (self.max_count is None or data.num_matches < self.max_count):
                     if self._parse_line(data):
                         match_found = True
                 if (
-                    (self._print_matching_files_only and match_found)
-                    or (self._print_non_matching_files_only and not match_found)
+                    (self.print_matching_files_only and match_found)
+                    or (self.print_non_matching_files_only and not match_found)
                 ):
-                    print(
-                        data.line_format.format(**data.line_data_dict),
-                        file=self._print_file,
-                        flush=self._line_buffered
-                    )
-                elif self._print_count_only:
+                    data.print_info(data.line_format.format(**data.line_data_dict))
+                elif self.print_count_only:
                     data.line_data_dict.update({
                         'num': AnsiString(''),
                         'byte_offset': AnsiString(''),
                         'line': data.num_matches
                     })
-                    print(
-                        data.line_format.format(**data.line_data_dict),
-                        file=self._print_file,
-                        flush=self._line_buffered
-                    )
+                    data.print_info(data.line_format.format(**data.line_data_dict))
             except BinaryDetectedException:
                 pass # Skip the rest of the file and continue
         return match_found
@@ -1628,28 +1377,34 @@ class Grep:
                 break
         return exclude
 
-    def execute(self):
+    def execute(self, return_matches=True):
         '''
         Executes Grep with all the assigned attributes.
-        Returns: a list of files with matches
+        Inputs: return_matches - set to True to fill in data as described below
+        Returns: a dictionary with the following key/values:
+                    'files': list of matched files
+                    'lines': list of matched lines or [] if return_matches if False
+                    'info': list of information lines or [] if return_matches if False
+                    'errors': list of error lines or [] if return_matches if False
+        Raises: ValueError if no expressions added
+                ValueError if no files added and no default input file set during init
         '''
         if not self._expressions:
-            print('No expressions provided', file=sys.stderr)
-            return None
+            raise ValueError('No expressions provided')
 
-        data = self._init_line_parsing_data()
+        data = self._init_line_parsing_data(return_matches)
         matched_files = []
 
         for file in data.files:
             if os.path.isdir(file.name):
                 if not self._is_excluded_dir(file.name):
-                    if self._directory_handling_type == __class__.Directory.READ:
-                        print('{}: {}: Is a directory'.format(PACKAGE_NAME, file.name))
+                    if self.directory_handling_type == __class__.Directory.READ:
+                        data.print_info('{}: {}: Is a directory'.format(PACKAGE_NAME, file.name))
                     elif (
-                        self._directory_handling_type == __class__.Directory.RECURSE
-                        or self._directory_handling_type == __class__.Directory.RECURSE_LINKS
+                        self.directory_handling_type == __class__.Directory.RECURSE
+                        or self.directory_handling_type == __class__.Directory.RECURSE_LINKS
                     ):
-                        followlinks = (self._directory_handling_type == __class__.Directory.RECURSE_LINKS)
+                        followlinks = (self.directory_handling_type == __class__.Directory.RECURSE_LINKS)
                         for root, dirs, recurse_files in os.walk(file.name, followlinks=followlinks):
                             if not self._is_excluded_dir(root):
                                 for recurse_file in recurse_files:
@@ -1663,7 +1418,9 @@ class Grep:
                 if self._parse_file(file, data):
                     matched_files += [file.name]
 
-        return matched_files
+        out_dict = data.printed_data
+        out_dict['files'] = matched_files
+        return out_dict
 
 class GrepArgParser:
     '''
@@ -1713,7 +1470,8 @@ class GrepArgParser:
         regexp_group.add_argument('-x', '--line-regexp', action='store_true',
                                 help='match whole lines only')
         regexp_group.add_argument('--end', type=str, default='\n',
-                                   help='newline character lines will be parsed by (default: \\n)')
+                                   help='end-of-line character for parsing search files (default: \\n); '
+                                   'this does not affect file parsing for -f or --exclude-from')
         regexp_group.add_argument('-z', '--null-data', action='store_true',
                                    help='same as --end=\'\\0\'')
 
@@ -1861,7 +1619,7 @@ class GrepArgParser:
             print('Try --help for more information', file=sys.stderr)
             return False
 
-        grep_object.add_expression(expressions)
+        grep_object.add_expressions(expressions)
 
         if self._args.file:
             grep_object.add_files(self._expand_cli_paths(self._args.file))
@@ -1947,11 +1705,15 @@ class GrepArgParser:
             grep_object.context_name_byte_sep += '\t'
 
         if self._args.color == 'always':
-            grep_object.color_output_mode = Grep.ColorOutputMode.ALWAYS
+            grep_object.output_color = True
         elif self._args.color == 'never':
-            grep_object.color_output_mode = Grep.ColorOutputMode.NEVER
+            grep_object.output_color = False
         else:
-            grep_object.color_output_mode = Grep.ColorOutputMode.AUTO
+            # Auto - only enable color if not printing to file and stdout is a tty
+            if grep_object.out_file is not None:
+                grep_object.output_color = grep_object.out_file.isatty()
+            else:
+                grep_object.output_color = sys.stdout.isatty()
 
         if self._args.binary_files == 'text' or self._args.text:
             grep_object.binary_parse_function = Grep.BinaryParseFunction.IGNORE_DECODE_ERRORS
@@ -1985,13 +1747,15 @@ def main(cliargs):
     Performs Grep with given command line arguments
     Returns: 0 on success, non-zero integer on failure
     '''
-    grep = Grep()
+    grep = Grep(sys.stdout, sys.stderr, sys.stdin)
     grep_arg_parser = GrepArgParser()
     if not grep_arg_parser.parse(cliargs, grep):
         return 1
     else:
-        matched_files = grep.execute()
-        if matched_files is not None:
-            return 0
-        else:
+        try:
+            grep.execute(False)
+        except Exception as ex:
+            print('{}: {}'.format(PACKAGE_NAME, str(ex)), file=sys.stderr)
             return 1
+        else:
+            return 0

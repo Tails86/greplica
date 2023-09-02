@@ -79,10 +79,14 @@ class FakeStdOut:
     def isatty(self):
         return self._isatty
 
+class PermissionErrorMockAutoInputFileIterable(grep.AutoInputFileIterable):
+    def __iter__(self):
+        raise EnvironmentError(f"[Errno 13] Permission denied: '{self.name}'")
+
 def _is_windows():
     return sys.platform.lower().startswith('win')
 
-class CliTests(unittest.TestCase):
+class GrepTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -825,6 +829,102 @@ class CliTests(unittest.TestCase):
                 grep.main(['--color=never', '-U', 'file\r'])
                 out = fake_out.getvalue()
             self.assertEqual(out, f'this file\r\n')
+
+    #
+    # Library Interface Tests
+    #
+
+    def test_lib_no_expressions(self):
+        grep_obj = grep.Grep()
+        grep_obj.add_files('file1.txt')
+        self.assertRaises(ValueError, grep_obj.execute)
+
+    def test_lib_no_files(self):
+        grep_obj = grep.Grep()
+        grep_obj.add_expressions('any')
+        self.assertRaises(ValueError, grep_obj.execute)
+
+    def test_lib_string_match_no_color(self):
+        grep_obj = grep.Grep()
+        grep_obj.add_expressions('any')
+        grep_obj.add_files('file1.txt', 'file2.txt', 'file3.txt')
+        data = grep_obj.execute()
+        self.assertEqual(data['files'], ['file1.txt', 'file2.txt'])
+        self.assertEqual(data['lines'], [
+            'And can event rapid any shall woman green.',
+            'Taken now you him trees tears any.'
+        ])
+        self.assertEqual(data['info'], [])
+        self.assertEqual(data['errors'], [])
+
+    def test_lib_string_match_with_color_name_and_numbers(self):
+        grep_obj = grep.Grep()
+        grep_obj.grep_color_dict = {} # Use default colors
+        grep_obj.add_expressions('any')
+        grep_obj.add_files('file1.txt', 'file2.txt', 'file3.txt')
+        grep_obj.output_color = True
+        grep_obj.output_file_name = True
+        grep_obj.output_line_numbers = True
+        grep_obj.output_byte_offset = True
+        data = grep_obj.execute()
+        self.assertEqual(data['files'], ['file1.txt', 'file2.txt'])
+        self.assertEqual(data['lines'], [
+            '\x1b[35mfile1.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m3\x1b[m\x1b[36m:\x1b[m\x1b[32m117\x1b[m\x1b[36m:\x1b[m'
+                'And can event rapid \x1b[01;31many\x1b[m shall woman green.',
+            '\x1b[35mfile2.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m8\x1b[m\x1b[36m:\x1b[m\x1b[32m393\x1b[m\x1b[36m:\x1b[m'
+                'Taken now you him trees tears \x1b[01;31many\x1b[m.'
+        ])
+        self.assertEqual(data['info'], [])
+        self.assertEqual(data['errors'], [])
+
+    def test_lib_matching_files_only(self):
+        grep_obj = grep.Grep()
+        grep_obj.add_expressions('any')
+        grep_obj.add_files(['file1.txt', 'file2.txt', 'file3.txt'])
+        grep_obj.print_matching_files_only = True
+        data = grep_obj.execute()
+        self.assertEqual(data['files'], ['file1.txt', 'file2.txt'])
+        self.assertEqual(data['lines'], [])
+        self.assertEqual(data['info'], ['file1.txt', 'file2.txt'])
+        self.assertEqual(data['errors'], [])
+
+    def test_lib_count_only(self):
+        grep_obj = grep.Grep()
+        grep_obj.add_expressions('any')
+        grep_obj.add_files(['file1.txt', 'file2.txt', 'file3.txt'])
+        grep_obj.print_count_only = True
+        data = grep_obj.execute()
+        self.assertEqual(data['files'], ['file1.txt', 'file2.txt'])
+        self.assertEqual(data['lines'], [])
+        self.assertEqual(data['info'], ['file1.txt:1', 'file2.txt:1', 'file3.txt:0'])
+        self.assertEqual(data['errors'], [])
+
+    def test_lib_print_directory(self):
+        grep_obj = grep.Grep()
+        grep_obj.add_files('.')
+        grep_obj.add_expressions('any')
+        grep_obj.directory_handling_type = grep.Grep.Directory.READ
+        data = grep_obj.execute()
+        self.assertEqual(data['files'], [])
+        self.assertEqual(data['lines'], [])
+        self.assertEqual(data['info'], ['greplica: .: Is a directory'])
+        self.assertEqual(data['errors'], [])
+
+    def test_lib_access_error(self):
+        with patch('greplica.grep.AutoInputFileIterable', PermissionErrorMockAutoInputFileIterable):
+            grep_obj = grep.Grep()
+            grep_obj.add_files('file1.txt', 'file2.txt', 'file3.txt')
+            grep_obj.add_expressions('any')
+            data = grep_obj.execute()
+            self.assertEqual(data['files'], [])
+            self.assertEqual(data['lines'], [])
+            self.assertEqual(data['info'], [])
+            self.assertEqual(data['errors'], [
+                "greplica: [Errno 13] Permission denied: 'file1.txt'",
+                "greplica: [Errno 13] Permission denied: 'file2.txt'",
+                "greplica: [Errno 13] Permission denied: 'file3.txt'"
+            ])
+
 
 if __name__ == '__main__':
     unittest.main()

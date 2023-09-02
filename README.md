@@ -8,7 +8,7 @@ file streams only, and there is no way to adjust this.
 - Context cannot be given as raw number -NUM.
 - The -P, --perl-regexp option is currently not supported, but support may be added in the future.
 - The -T, --initial-tab option currently doesn't work as well as it does in grep.
-- The Python module re is internally used for all regular expressions. The inputted regular
+- The Python module `re` is internally used for all regular expressions. The inputted regular
 expression is modified only when basic regular expressions are used. See --help for more
 information.
 
@@ -18,7 +18,6 @@ Future planned work includes the following:
 
 - Try to support perl regex syntax
 - Fix tab option
-- Optionally return matching lines when Grep.execute() is called from a library
 
 ## Contribution
 
