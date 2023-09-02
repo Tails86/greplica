@@ -1803,7 +1803,7 @@ class GrepArgParser:
         return sys.platform.lower().startswith('win')
 
     def _expand_cli_path(self, path):
-        if __class__._is_windows():
+        if __class__._is_windows() and '*' in path or '?' in path:
             # Need to manually expand this out
             expanded_paths = [f for f in glob.glob(path)]
             if not expanded_paths:

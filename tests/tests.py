@@ -63,12 +63,12 @@ class CliTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmpdir = tempfile.TemporaryDirectory()
-        with open(os.path.join(cls.tmpdir.name, "file1.txt"), "w") as fd:
-            fd.write(test_file1)
-        with open(os.path.join(cls.tmpdir.name, "file2.txt"), "w") as fd:
-            fd.write(test_file2)
-        with open(os.path.join(cls.tmpdir.name, "patterns.txt"), "w") as fd:
-            fd.write('glue\nkelp\ntrash\ntree\nneglect')
+        with open(os.path.join(cls.tmpdir.name, "file1.txt"), "wb") as fd:
+            fd.write(test_file1.encode())
+        with open(os.path.join(cls.tmpdir.name, "file2.txt"), "wb") as fd:
+            fd.write(test_file2.encode())
+        with open(os.path.join(cls.tmpdir.name, "patterns.txt"), "wb") as fd:
+            fd.write(b'glue\nkelp\ntrash\ntree\nneglect')
 
     def setUp(self):
         self.old_dir = os.getcwd()
