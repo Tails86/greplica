@@ -54,9 +54,6 @@ setuptools.setup(
         'Operating System :: OS Independent',
     ],
     python_requires='>=3.5',
-    extras_require={
-        'dev': ['check-manifest']
-    },
     entry_points={
         'console_scripts': console_scripts
     }
