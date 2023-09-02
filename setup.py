@@ -44,7 +44,6 @@ setuptools.setup(
         'Environment :: Console',
         'Intended Audience :: Information Technology',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
@@ -53,7 +52,7 @@ setuptools.setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
     ],
-    python_requires='>=3.5',
+    python_requires='>=3.6',
     entry_points={
         'console_scripts': console_scripts
     }
