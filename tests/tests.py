@@ -58,6 +58,9 @@ class FakeStdOut:
     def isatty(self):
         return self._isatty
 
+def _is_windows():
+    return sys.platform.lower().startswith('win')
+
 class CliTests(unittest.TestCase):
 
     @classmethod
@@ -490,17 +493,20 @@ class CliTests(unittest.TestCase):
         self.assertEqual(out, '')
 
     def test_recurse_directory(self):
+        s = os.path.sep
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
             grep.main(['--color=never', '-d', 'recurse', 'oppose', '.'])
             out = fake_out.getvalue()
-        self.assertEqual(out, './file2.txt:Her object giving end sister except oppose.\n')
+        self.assertEqual(out, f'.{s}file2.txt:Her object giving end sister except oppose.\n')
 
     def test_recurse_directory_option(self):
+        s = os.path.sep
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
             grep.main(['--color=never', '-r', 'oppose', '.'])
             out = fake_out.getvalue()
-        self.assertEqual(out, './file2.txt:Her object giving end sister except oppose.\n')
+        self.assertEqual(out, f'.{s}file2.txt:Her object giving end sister except oppose.\n')
 
+    @unittest.skipIf(_is_windows(), "symlinks can't easily be created in windows")
     def test_recurse_directory_not_following_symlinks(self):
         tmp_dir = tempfile.TemporaryDirectory()
         old_cwd = os.getcwd()
@@ -515,7 +521,9 @@ class CliTests(unittest.TestCase):
             os.chdir(old_cwd)
             tmp_dir.cleanup()
 
+    @unittest.skipIf(_is_windows(), "symlinks can't easily be created in windows")
     def test_recurse_directory_following_symlinks(self):
+        s = os.path.sep
         tmp_dir = tempfile.TemporaryDirectory()
         old_cwd = os.getcwd()
         os.chdir(tmp_dir.name)
@@ -524,7 +532,7 @@ class CliTests(unittest.TestCase):
             with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
                 grep.main(['--color=never', '-R', 'oppose', '.'])
                 out = fake_out.getvalue()
-            self.assertEqual(out, './link/file2.txt:Her object giving end sister except oppose.\n')
+            self.assertEqual(out, f'.{s}link{s}file2.txt:Her object giving end sister except oppose.\n')
         finally:
             os.chdir(old_cwd)
             tmp_dir.cleanup()
@@ -547,7 +555,9 @@ class CliTests(unittest.TestCase):
             out = fake_out.getvalue()
         self.assertEqual(out, 'General windows effects not are drawing man garrets.\nTaken now you him trees tears any.\n')
 
+    @unittest.skipIf(_is_windows(), "symlinks can't easily be created in windows")
     def test_exclude_dir(self):
+        s = os.path.sep
         tmp_dir = tempfile.TemporaryDirectory()
         old_cwd = os.getcwd()
         os.chdir(tmp_dir.name)
@@ -560,7 +570,7 @@ class CliTests(unittest.TestCase):
             with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
                 grep.main(['--color=never', '-R', 'oppose', '.', '--exclude-dir', 'l*k', 'sin?'])
                 out = fake_out.getvalue()
-            self.assertEqual(out, './lick:all opposed\n./blink/file2.txt:Her object giving end sister except oppose.\n')
+            self.assertEqual(out, f'.{s}lick:all opposed\n.{s}blink{s}file2.txt:Her object giving end sister except oppose.\n')
         finally:
             os.chdir(old_cwd)
             tmp_dir.cleanup()
