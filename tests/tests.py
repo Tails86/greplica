@@ -69,6 +69,8 @@ class CliTests(unittest.TestCase):
             fd.write(test_file2.encode())
         with open(os.path.join(cls.tmpdir.name, "patterns.txt"), "wb") as fd:
             fd.write(b'glue\nkelp\ntrash\ntree\nneglect')
+        with open(os.path.join(cls.tmpdir.name, "globfile.txt"), "wb") as fd:
+            fd.write(b'*1.txt\n\n\n')
 
     def setUp(self):
         self.old_dir = os.getcwd()
@@ -80,6 +82,14 @@ class CliTests(unittest.TestCase):
 
     def tearDown(self):
         os.chdir(self.old_dir)
+
+    def test_match_empty_line(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()), \
+            patch('greplica.grep.sys.stdin', FakeStdIn('abc\n\ndef')) \
+        :
+            # This will cause a match of length 0 and try to color it
+            # This would previously cause an exception
+            grep.main(['--color=always', '-E', '^.*$', 'file1.txt', 'file2.txt'])
 
     def test_search_no_color(self):
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
@@ -459,6 +469,100 @@ class CliTests(unittest.TestCase):
             self.assertEqual(lines, [''])
             self.assertEqual(err_text, '')
         finally:
+            tmp_dir.cleanup()
+
+    def test_default_directory(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', 'oppose', '.'])
+            out = fake_out.getvalue()
+        self.assertEqual(out, 'greplica: .: Is a directory\n')
+
+    def test_read_directory(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', '-d', 'read', 'oppose', '.'])
+            out = fake_out.getvalue()
+        self.assertEqual(out, 'greplica: .: Is a directory\n')
+
+    def test_skip_directory(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', '-d', 'skip', 'oppose', '.'])
+            out = fake_out.getvalue()
+        self.assertEqual(out, '')
+
+    def test_recurse_directory(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', '-d', 'recurse', 'oppose', '.'])
+            out = fake_out.getvalue()
+        self.assertEqual(out, './file2.txt:Her object giving end sister except oppose.\n')
+
+    def test_recurse_directory_option(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', '-r', 'oppose', '.'])
+            out = fake_out.getvalue()
+        self.assertEqual(out, './file2.txt:Her object giving end sister except oppose.\n')
+
+    def test_recurse_directory_not_following_symlinks(self):
+        tmp_dir = tempfile.TemporaryDirectory()
+        old_cwd = os.getcwd()
+        os.chdir(tmp_dir.name)
+        os.symlink(self.tmpdir.name, os.path.join(tmp_dir.name, 'link'))
+        try:
+            with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+                grep.main(['--color=never', '-r', 'oppose', '.'])
+                out = fake_out.getvalue()
+            self.assertEqual(out, '')
+        finally:
+            os.chdir(old_cwd)
+            tmp_dir.cleanup()
+
+    def test_recurse_directory_following_symlinks(self):
+        tmp_dir = tempfile.TemporaryDirectory()
+        old_cwd = os.getcwd()
+        os.chdir(tmp_dir.name)
+        os.symlink(self.tmpdir.name, os.path.join(tmp_dir.name, 'link'))
+        try:
+            with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+                grep.main(['--color=never', '-R', 'oppose', '.'])
+                out = fake_out.getvalue()
+            self.assertEqual(out, './link/file2.txt:Her object giving end sister except oppose.\n')
+        finally:
+            os.chdir(old_cwd)
+            tmp_dir.cleanup()
+
+    def test_include_glob(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', 'no', 'file1.txt', 'file2.txt', '--include', '*1.txt'])
+            out = fake_out.getvalue()
+        self.assertEqual(out, 'Smiling nothing affixed he carried it clothes calling he no.\n')
+
+    def test_exclude_glob(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', 'no', 'file1.txt', 'file2.txt', '--exclude', '*1.txt'])
+            out = fake_out.getvalue()
+        self.assertEqual(out, 'General windows effects not are drawing man garrets.\nTaken now you him trees tears any.\n')
+
+    def test_exclude_glob_file(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', 'no', 'file1.txt', 'file2.txt', '--exclude-from', 'globfile.txt'])
+            out = fake_out.getvalue()
+        self.assertEqual(out, 'General windows effects not are drawing man garrets.\nTaken now you him trees tears any.\n')
+
+    def test_exclude_dir(self):
+        tmp_dir = tempfile.TemporaryDirectory()
+        old_cwd = os.getcwd()
+        os.chdir(tmp_dir.name)
+        os.symlink(self.tmpdir.name, os.path.join(tmp_dir.name, 'link'))
+        os.symlink(self.tmpdir.name, os.path.join(tmp_dir.name, 'blink'))
+        os.symlink(self.tmpdir.name, os.path.join(tmp_dir.name, 'sink'))
+        with open('lick', 'wb') as fd:
+            fd.write(b'All in favor\nall opposed')
+        try:
+            with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+                grep.main(['--color=never', '-R', 'oppose', '.', '--exclude-dir', 'l*k', 'sin?'])
+                out = fake_out.getvalue()
+            self.assertEqual(out, './lick:all opposed\n./blink/file2.txt:Her object giving end sister except oppose.\n')
+        finally:
+            os.chdir(old_cwd)
             tmp_dir.cleanup()
 
 
