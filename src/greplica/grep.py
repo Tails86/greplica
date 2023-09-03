@@ -720,6 +720,8 @@ class Grep:
         self.print_non_matching_files_only:bool = False
         # Boolean: when true, only count of number of matches for each file is printed
         self.print_count_only:bool = False
+        # Boolean: when true, add spaces to the left of numbers based on file size
+        self.space_numbers_by_size:bool = False
         # Dictionary: Contains grep color information
         # By default, this reads from environment to generate the dict - set to {} to use defaults
         self.grep_color_dict:dict = __class__._generate_color_dict()
@@ -900,6 +902,8 @@ class Grep:
             self.current_before_context = []
             self.after_context_count = 0
             self.current_after_context_counter = 0
+            self.space_numbers_by_size = False
+            self.number_format = '{}'
 
         def set_file(self, file):
             '''
@@ -917,6 +921,11 @@ class Grep:
             if file:
                 self.line_data_dict['filename'] = AnsiString(file.name)
                 self.file_iter = iter(file)
+                if self.space_numbers_by_size:
+                    file_stat = os.stat(file.name)
+                    self.number_format = '{:>' + str(len(str(file_stat.st_size))) + '}'
+                else:
+                    self.number_format = '{}'
             else:
                 try:
                     self.line_data_dict.pop('filename')
@@ -1028,9 +1037,10 @@ class Grep:
                     slice_byte_offset = line_slice.start
                 else:
                     slice_byte_offset = 0
+
                 self.line_data_dict.update({
-                    'num': AnsiString(str(line_num)),
-                    'byte_offset': AnsiString(str(byte_offset + slice_byte_offset)),
+                    'num': AnsiString(self.number_format.format(line_num)),
+                    'byte_offset': AnsiString(self.number_format.format(byte_offset + slice_byte_offset)),
                     'line': formatted_line[line_slice]
                 })
                 self.print_line(line_format.format(**self.line_data_dict))
@@ -1154,6 +1164,7 @@ class Grep:
         data.binary_parse_function = self.binary_parse_function
         data.strip_cr = self.strip_cr
         data.color_enabled = self.output_color
+        data.space_numbers_by_size = self.space_numbers_by_size
 
         # Only apply context values if only_matching is not set
         if not self.only_matching:
@@ -1523,7 +1534,6 @@ class GrepArgParser:
         output_ctrl_grp.add_argument('-L', '--files-without-match', action='store_true', help='print only names of FILEs with no selected lines')
         output_ctrl_grp.add_argument('-l', '--files-with-matches', action='store_true', help='print only names of FILEs with selected lines')
         output_ctrl_grp.add_argument('-c', '--count', action='store_true', help='print only a count of selected lines per FILE')
-        # TODO: fix the below feature
         output_ctrl_grp.add_argument('-T', '--initial-tab', action='store_true',
                                      help='currently just adds tabs to each sep value (will make better later)')
         output_ctrl_grp.add_argument('-Z', '--null', action='store_true', help='adds 0 to the end of result-sep')
@@ -1654,6 +1664,7 @@ class GrepArgParser:
         grep_object.print_matching_files_only = self._args.files_with_matches
         grep_object.print_non_matching_files_only = self._args.files_without_match
         grep_object.print_count_only = self._args.count
+        grep_object.space_numbers_by_size = self._args.initial_tab
 
         if self._args.context is not None:
             grep_object.before_context_count = self._args.context
@@ -1690,11 +1701,7 @@ class GrepArgParser:
         if self._args.null:
             grep_object.results_sep += '\0'
         grep_object.name_num_sep = bytes(self._args.name_num_sep, "utf-8").decode("unicode_escape")
-        if self._args.initial_tab:
-            grep_object.name_num_sep += '\t'
         grep_object.name_byte_sep = bytes(self._args.name_byte_sep, "utf-8").decode("unicode_escape")
-        if self._args.initial_tab:
-            grep_object.name_byte_sep += '\t'
 
         grep_object.context_sep = bytes(self._args.context_group_sep, "utf-8").decode("unicode_escape")
         grep_object.context_results_sep = bytes(self._args.context_result_sep, "utf-8").decode("unicode_escape")
@@ -1703,11 +1710,7 @@ class GrepArgParser:
         if self._args.null:
             grep_object.context_results_sep += '\0'
         grep_object.context_name_num_sep = bytes(self._args.context_name_num_sep, "utf-8").decode("unicode_escape")
-        if self._args.initial_tab:
-            grep_object.context_name_num_sep += '\t'
         grep_object.context_name_byte_sep = bytes(self._args.context_name_byte_sep, "utf-8").decode("unicode_escape")
-        if self._args.initial_tab:
-            grep_object.context_name_byte_sep += '\t'
 
         if self._args.color == 'always':
             grep_object.output_color = True

@@ -6,16 +6,9 @@ A grep clone in Python with both CLI and library interfaces, supporting ANSI col
 - The -D, --devices option is not supported and no support is planned. All inputs are handled as
 file streams only, and there is no way to adjust this.
 - Context cannot be given as raw number -NUM.
-- The -T, --initial-tab option currently doesn't work as well as it does in grep.
 - The Python module `re` is internally used for all regular expressions. The inputted regular
 expression is modified only when basic regular expressions are used. See --help for more
 information.
-
-## Development Roadmap
-
-Future planned work includes the following:
-
-- Fix tab option
 
 ## Contribution
 

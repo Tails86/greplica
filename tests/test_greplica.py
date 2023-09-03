@@ -254,6 +254,15 @@ class GrepTests(unittest.TestCase):
         self.assertEqual(lines[1], 'Put sir she exercise vicinity cheerful wondered.')
         self.assertEqual(lines[2], '')
 
+    def test_perl_regex(self):
+        with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
+            grep.main(['--color=never', '-P', '(is.*she)|(she.*is)', 'file1.txt', 'file2.txt'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(len(lines), 3)
+        self.assertEqual(lines[0], 'Its something disposing departure she favorite tolerably engrossed.')
+        self.assertEqual(lines[1], 'Put sir she exercise vicinity cheerful wondered.')
+        self.assertEqual(lines[2], '')
+
     def test_fixed_strings(self):
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
             grep.main(['--color=never', '-F', '.*', 'file1.txt', 'file2.txt'])
@@ -689,11 +698,11 @@ class GrepTests(unittest.TestCase):
             grep.main(['--color=never', 'sit', 'file1.txt', 'file2.txt', 'file3.txt', 'file4.txt', '-THn'])
             lines = fake_out.getvalue().split('\n')
         self.assertEqual(lines, [
-            'file2.txt:\t3:\tContinual say suspicion provision he neglected sir curiosity unwilling.',
-            'file4.txt:\t6:\tMi sit amet mauris commodo quis imperdiet.',
-            'file4.txt:\t9:\tDonec enim diam vulputate ut pharetra sit amet aliquam id.',
-            'file4.txt:\t10:\tProin libero nunc consequat interdum varius sit amet mattis.',
-            'file4.txt:\t13:\tUt etiam sit amet nisl purus in mollis nunc sed.',
+            'file2.txt:  3:\tContinual say suspicion provision he neglected sir curiosity unwilling.',
+            'file4.txt:  6:\tMi sit amet mauris commodo quis imperdiet.',
+            'file4.txt:  9:\tDonec enim diam vulputate ut pharetra sit amet aliquam id.',
+            'file4.txt: 10:\tProin libero nunc consequat interdum varius sit amet mattis.',
+            'file4.txt: 13:\tUt etiam sit amet nisl purus in mollis nunc sed.',
             ''
         ])
 
