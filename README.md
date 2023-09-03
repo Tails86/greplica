@@ -230,7 +230,7 @@ clear_files(self)
 The following Grep options may be adjusted.
 ```py
 # Grep.SearchType: The search type which sets how expressions are parsed.
-search_type:__class__.SearchType = __class__.SearchType.BASIC_REGEXP
+search_type:Grep.SearchType = Grep.SearchType.BASIC_REGEXP
 
 # Boolean: when true, expression's case is ignored during search
 ignore_case:bool = False
@@ -292,7 +292,7 @@ context_name_byte_sep:str = '-'
 output_color:bool = False
 
 # Grep.Directory: sets how directories are handled when they are included in file list
-directory_handling_type:__class__.Directory = __class__.Directory.READ
+directory_handling_type:Grep.Directory = Grep.Directory.READ
 
 # String: the label to print when output_file_name is true and stdin is parsed
 label:str = '(standard input)'
@@ -304,7 +304,7 @@ quiet:bool = False
 only_matching:bool = False
 
 # Grep.BinaryParseFunction: sets how binary files are handled
-binary_parse_function:__class__.BinaryParseFunction = __class__.BinaryParseFunction.PRINT_ERROR
+binary_parse_function:Grep.BinaryParseFunction = Grep.BinaryParseFunction.PRINT_ERROR
 
 # Boolean: when true, CR are stripped from the end of every line when found
 strip_cr:bool = True
@@ -329,7 +329,7 @@ space_numbers_by_size:bool = False
 
 # Dictionary: Contains grep color information
 # By default, this reads from environment to generate the dict - set to {} to use defaults
-grep_color_dict:dict = __class__._generate_color_dict()
+grep_color_dict:dict
 ```
 
 At any point, reset() may be called to reset all settings.
