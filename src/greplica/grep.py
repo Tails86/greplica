@@ -649,7 +649,7 @@ class Grep:
 
     def reset(self):
         '''
-        Resets all Grep state values except for the print file.
+        Resets all Grep state values except for the out_file, err_file, and default_in_file.
         '''
         self._expressions:list = []
         self._files:list = []
@@ -765,35 +765,47 @@ class Grep:
         '''
         self._files = []
 
-    def add_file_include_globs(self, glob_or_globs):
-        if isinstance(glob_or_globs, list):
-            self._file_include_globs.extend(glob_or_globs)
-        elif isinstance(glob_or_globs, str):
-            self._file_include_globs.append(glob_or_globs)
-        else:
-            raise TypeError('Invalid type ({}) for glob_or_globs'.format(type(glob_or_globs)))
+    def add_file_include_globs(self, *args):
+        '''
+        Limit files to those matching given globs.
+        '''
+        for arg in args:
+            if isinstance(arg, list):
+                self._file_include_globs.extend(arg)
+            elif isinstance(arg, str):
+                self._file_include_globs.append(arg)
+            else:
+                raise TypeError('Invalid type ({}) for include glob'.format(type(arg)))
 
     def clear_file_include_globs(self):
         self._file_include_globs = []
 
-    def add_file_exclude_globs(self, glob_or_globs):
-        if isinstance(glob_or_globs, list):
-            self._file_exclude_globs.extend(glob_or_globs)
-        elif isinstance(glob_or_globs, str):
-            self._file_exclude_globs.append(glob_or_globs)
-        else:
-            raise TypeError('Invalid type ({}) for glob_or_globs'.format(type(glob_or_globs)))
+    def add_file_exclude_globs(self, *args):
+        '''
+        Skip files that match given globs.
+        '''
+        for arg in args:
+            if isinstance(arg, list):
+                self._file_exclude_globs.extend(arg)
+            elif isinstance(arg, str):
+                self._file_exclude_globs.append(arg)
+            else:
+                raise TypeError('Invalid type ({}) for exclude glob'.format(type(arg)))
 
     def clear_file_exclude_globs(self):
         self._file_exclude_globs = []
 
-    def add_dir_exclude_globs(self, glob_or_globs):
-        if isinstance(glob_or_globs, list):
-            self._dir_exclude_globs.extend(glob_or_globs)
-        elif isinstance(glob_or_globs, str):
-            self._dir_exclude_globs.append(glob_or_globs)
-        else:
-            raise TypeError('Invalid type ({}) for glob_or_globs'.format(type(glob_or_globs)))
+    def add_dir_exclude_globs(self, *args):
+        '''
+        Skip directories that match given globs.
+        '''
+        for arg in args:
+            if isinstance(arg, list):
+                self._dir_exclude_globs.extend(arg)
+            elif isinstance(arg, str):
+                self._dir_exclude_globs.append(arg)
+            else:
+                raise TypeError('Invalid type ({}) for dir exclude glob'.format(type(arg)))
 
     def clear_dir_exclude_globs(self):
         self._dir_exclude_globs = []
@@ -820,7 +832,7 @@ class Grep:
         return self._default_in_file
 
     @property
-    def end(self):
+    def end(self) -> bytes:
         '''
         String: the sequence of characters expected at the end of each line ex: \\n
         '''
@@ -904,6 +916,7 @@ class Grep:
             self.current_after_context_counter = 0
             self.space_numbers_by_size = False
             self.number_format = '{}'
+            self.print_status_messages = True
 
         def set_file(self, file):
             '''
@@ -951,20 +964,21 @@ class Grep:
                 self.line = next(self.file_iter)
             except StopIteration:
                 # File is complete
-                status_msgs = ''
-                if (
-                    self.binary_detected
-                    and self.num_matches > 0
-                    and self.binary_parse_function == Grep.BinaryParseFunction.PRINT_ERROR
-                ):
-                    status_msgs += 'binary file matches'
-                if self.overflow_detected:
+                if self.print_status_messages:
+                    status_msgs = ''
+                    if (
+                        self.binary_detected
+                        and self.num_matches > 0
+                        and self.binary_parse_function == Grep.BinaryParseFunction.PRINT_ERROR
+                    ):
+                        status_msgs += 'binary file matches'
+                    if self.overflow_detected:
+                        if status_msgs:
+                            status_msgs += ' and'
+                        status_msgs += ' line overflow detected'
                     if status_msgs:
-                        status_msgs += ' and'
-                    status_msgs += ' line overflow detected'
-                if status_msgs:
-                    self.print_line('{filename}: {status_msgs}'
-                                  .format(status_msgs=status_msgs, **self.line_data_dict))
+                        self.print_info('{filename}: {status_msgs}'
+                                        .format(status_msgs=status_msgs, **self.line_data_dict))
                 return False
 
             self.line_len = len(self.line)
@@ -1260,6 +1274,7 @@ class Grep:
             data.line_print_fn = lambda line, end=None : print(line, file=self._out_file, flush=self.line_buffered, end=end)
         else:
             # Do nothing on line print
+            data.print_status_messages = False
             data.line_print_fn = None
 
         if not self.quiet:

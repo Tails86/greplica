@@ -934,6 +934,20 @@ class GrepTests(unittest.TestCase):
                 "greplica: [Errno 13] Permission denied: 'file3.txt'"
             ])
 
+    def test_lib_binary_matches_print_to_info(self):
+        tmp_dir = tempfile.TemporaryDirectory()
+        try:
+            binary_file_path = os.path.join(tmp_dir.name, 'binary.txt')
+            with open(binary_file_path, 'wb') as fd:
+                fd.write(b'\xe0eggs eggs eggs bum bum\xf9kjdbnfka\xffdfbub')
+            grep_obj = grep.Grep()
+            grep_obj.add_files(binary_file_path)
+            grep_obj.add_expressions('eggs')
+            data = grep_obj.execute()
+            self.assertEqual(data['info'], [f'{binary_file_path}: binary file matches'])
+        finally:
+            tmp_dir.cleanup()
+
 
 if __name__ == '__main__':
     unittest.main()

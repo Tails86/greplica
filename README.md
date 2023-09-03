@@ -1,4 +1,5 @@
 # greplica
+
 A grep clone in Python with both CLI and library interfaces, supporting ANSI color coding and more.
 
 ## Known Differences with grep
@@ -143,3 +144,214 @@ Context Control:
                         'always', 'never', or 'auto'
   -U, --binary          do not strip CR characters at EOL (MSDOS/Windows)
   ```
+
+## Library Help
+
+greplica can be used as a library from another module. The following is a simple example.
+```py
+from greplica.grep import Grep
+
+grep_obj = Grep()
+grep_obj.add_expressions('hello .*ld')
+grep_obj.add_files('file1.txt', 'path/to/file2.txt', 'path/to/directory/')
+grep_obj.directory_handling_type = grep.Grep.Directory.RECURSE
+data = grep_obj.execute()
+print(data['files']) # Prints filepaths where match found
+print(data['lines']) # Prints the matching lines
+print(data['info']) # Prints information lines like when binary file matches
+print(data['errors']) # Prints error lines like when permission denied
+```
+
+The following describes initialization arguments to Grep.
+```py
+__init__(self, out_file=None, err_file=None, default_in_file=None)
+  '''
+  Initializes Grep
+  Inputs: out_file - a file object to pass to print() as 'file' for regular messages.
+                     This should be set to sys.stdout if writing to terminal is desired.
+                     Writing to file is skipped when this is set to None. (default: None)
+          err_file - a file object to pass to print() as 'file' for error messages.
+                     This should be set to sys.stderr if writing to terminal is desired.
+                     Writing to file is skipped when this is set to None. (default: None)
+          default_in_file - default input file stream used when no files added.
+                     This should be set to sys.stdin if reading from terminal is desired by default.
+                     An exception will be caused on execute() if this is None and no files added.
+                     (default: None)
+  '''
+```
+
+The following methods may be called to add expressions, file paths, and globs.
+```py
+add_dir_exclude_globs(self, *args)
+  '''
+  Skip directories that match given globs.
+  '''
+
+add_expressions(self, *args)
+  '''
+  Adds a single expression or list of expressions that Grep will search for in selected files.
+  Inputs: all arguments must be list of strings or string - each string is an expression
+  '''
+
+add_file_exclude_globs(self, *args)
+  '''
+  Skip files that match given globs.
+  '''
+
+add_file_include_globs(self, *args)
+  '''
+  Limit files to those matching given globs.
+  '''
+
+add_files(self, *args)
+  '''
+  Adds a single file or list of files that Grep will crawl through. Each entry must be a path
+  to a file or directory. Directories are handled based on value of directory_handling_type.
+  Inputs: all arguments must be list of strings or string - each string is a file path
+  '''
+
+clear_dir_exclude_globs(self)
+
+clear_expressions(self)
+  '''
+  Clears all expressions that were previously set by add_expressions().
+  '''
+
+clear_file_exclude_globs(self)
+
+clear_file_include_globs(self)
+
+clear_files(self)
+  '''
+  Clear all files that were previously set by add_files().
+  '''
+```
+
+The following Grep options may be adjusted.
+```py
+# Grep.SearchType: The search type which sets how expressions are parsed.
+search_type:__class__.SearchType = __class__.SearchType.BASIC_REGEXP
+
+# Boolean: when true, expression's case is ignored during search
+ignore_case:bool = False
+
+# Boolean: when true, regex search is performed using pattern \\b{expr}\\b
+word_regexp:bool = False
+
+# Boolean: when true, line regex search is used
+line_regexp:bool = False
+
+# Boolean: when true, no error messages are printed
+no_messages:bool = False
+
+# Boolean: when true, matching lines are those that don't match expression
+invert_match:bool = False
+
+# None or int: when set, this is the maximum number of matching lines printed for each file
+max_count:int = None
+
+# Boolean: when true, line number of match is printed before result
+output_line_numbers:bool = False
+
+# Boolean: when true, file name is printed before result
+output_file_name:bool = False
+
+# Boolean: when true, byte offset is printed before result
+output_byte_offset:bool = False
+
+# Boolean: when true, each printed line is flushed before proceeding
+line_buffered:bool = False
+
+# bytes: the sequence of bytes expected at the end of each line
+end:bytes = b'\n'
+
+# String: the string printed after header information and before line contents
+results_sep:str = ':'
+
+# String: the string printed before line number if both file name and line number are printed
+name_num_sep:str = ':'
+
+# String: the string printed before byte offset value if byte offset as well as either file
+#         name or line number is printed.
+name_byte_sep:str = ':'
+
+# String: the string printed between each context group
+context_sep:str = '--\n'
+
+# String: the string printed after header information and before context line contents
+context_results_sep:str = '-'
+
+# String: the string printed before context line number if both file name and line number are printed
+context_name_num_sep:str = '-'
+
+# String: the string printed before context byte offset value if byte offset as well as either
+#         file name or line number is printed.
+context_name_byte_sep:str = '-'
+
+# Boolean: output color ANSI escape sequences in output text when True
+output_color:bool = False
+
+# Grep.Directory: sets how directories are handled when they are included in file list
+directory_handling_type:__class__.Directory = __class__.Directory.READ
+
+# String: the label to print when output_file_name is true and stdin is parsed
+label:str = '(standard input)'
+
+# Boolean: when true, normal output is not printed
+quiet:bool = False
+
+# Boolean: when true, only the matching contents are printed for each line
+only_matching:bool = False
+
+# Grep.BinaryParseFunction: sets how binary files are handled
+binary_parse_function:__class__.BinaryParseFunction = __class__.BinaryParseFunction.PRINT_ERROR
+
+# Boolean: when true, CR are stripped from the end of every line when found
+strip_cr:bool = True
+
+# Integer: number of lines of context to print before a match
+before_context_count:int = 0
+
+# Integer: number of lines of context to print after a match
+after_context_count:int = 0
+
+# Boolean: when true, only the file name of matching files are printed
+print_matching_files_only:bool = False
+
+# Boolean: when true, only the file name of non-matching files are printed
+print_non_matching_files_only:bool = False
+
+# Boolean: when true, only count of number of matches for each file is printed
+print_count_only:bool = False
+
+# Boolean: when true, add spaces to the left of numbers based on file size
+space_numbers_by_size:bool = False
+
+# Dictionary: Contains grep color information
+# By default, this reads from environment to generate the dict - set to {} to use defaults
+grep_color_dict:dict = __class__._generate_color_dict()
+```
+
+At any point, reset() may be called to reset all settings.
+```py
+reset(self)
+  '''
+  Resets all Grep state values except for the out_file, err_file, and default_in_file.
+  '''
+```
+
+The following method executes using all data set above.
+```py
+execute(self, return_matches=True)
+  '''
+  Executes Grep with all the assigned attributes.
+  Inputs: return_matches - set to True to fill in data as described below
+  Returns: a dictionary with the following key/values:
+              'files': list of matched files
+              'lines': list of matched lines or [] if return_matches if False
+              'info': list of information lines or [] if return_matches if False
+              'errors': list of error lines or [] if return_matches if False
+  Raises: ValueError if no expressions added
+          ValueError if no files added and no default input file set during init
+  '''
+```
