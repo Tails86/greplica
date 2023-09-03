@@ -1,6 +1,7 @@
 import setuptools
 import os
 import sys
+import fnmatch
 
 # This project is only packaged as sdist so that this setup.py script runs at the target
 
@@ -21,7 +22,8 @@ def _which(cmd):
         strip_ext = None
         case_sensitive = True
 
-    for dir_path in dirs:
+    # Only search paths which don't have 'python' in it (in case this is an upgrade)
+    for dir_path in [d for d in dirs if 'python' not in d.lower()]:
         for item in os.listdir(dir_path):
             if strip_ext and item.lower().endswith(strip_ext):
                 base_item = os.path.splitext(item)[0]
@@ -43,8 +45,12 @@ console_scripts = ['greplica=greplica.__main__:main']
 
 # This isn't perfect, but it's better than nothing
 # Install grep alias script only if grep is not already found in path
-if _which('grep') is None:
+grep_path = _which('grep')
+if grep_path is None:
+    print('Installing grep script because grep not found in PATH')
     console_scripts.append('grep=greplica.__main__:main')
+else:
+    print('Not installing grep; grep already found at: {}'.format(grep_path))
 
 setuptools.setup(
     name='greplica',
