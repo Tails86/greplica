@@ -154,7 +154,7 @@ from greplica.grep import Grep
 grep_obj = Grep()
 grep_obj.add_expressions('hello .*ld')
 grep_obj.add_files('file1.txt', 'path/to/file2.txt', 'path/to/directory/')
-grep_obj.directory_handling_type = grep.Grep.Directory.RECURSE
+grep_obj.directory_handling_type = Grep.Directory.RECURSE
 data = grep_obj.execute()
 print(data['files']) # Prints filepaths where match found
 print(data['lines']) # Prints the matching lines
