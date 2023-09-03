@@ -19,6 +19,10 @@ This project is uploaded to PyPI at https://pypi.org/project/greplica/
 
 To install, ensure you are connected to the internet and execute: `python3 -m pip install greplica`
 
+Once installed, there will be a script called `greplica` under Python's script directory. If `grep`
+is not found under PATH, then a script called `grep` will also be installed. Ensure Python's script
+directory is under PATH to be able to execute the script properly from command line.
+
 ## CLI Help
 ```
 usage: greplica [-E | -F | -G] [-P] [-e EXPRESSIONS] [-f FILE [FILE ...]] [-i]
