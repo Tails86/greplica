@@ -593,6 +593,7 @@ class Grep:
         FIXED_STRINGS = enum.auto()
         BASIC_REGEXP = enum.auto()
         EXTENDED_REGEXP = enum.auto()
+        PERL_REGEXP = enum.auto()
 
     class Directory(Enum):
         READ = enum.auto()
@@ -649,7 +650,7 @@ class Grep:
 
     def reset(self):
         '''
-        Resets all Grep state values except for the out_file, err_file, and default_in_file.
+        Resets all Grep state values except for out_file, err_file, and default_in_file.
         '''
         self._expressions:list = []
         self._files:list = []
@@ -1654,8 +1655,10 @@ class GrepArgParser:
         if self._args.file:
             grep_object.add_files(self._expand_cli_paths(self._args.file))
 
-        if self._args.extended_regexp or self._args.perl_regexp:
+        if self._args.extended_regexp:
             grep_object.search_type = Grep.SearchType.EXTENDED_REGEXP
+        elif self._args.perl_regexp:
+            grep_object.search_type = Grep.SearchType.PERL_REGEXP
         elif self._args.fixed_strings:
             grep_object.search_type = Grep.SearchType.FIXED_STRINGS
         else:

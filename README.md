@@ -21,8 +21,9 @@ This project is uploaded to PyPI at https://pypi.org/project/greplica/
 To install, ensure you are connected to the internet and execute: `python3 -m pip install greplica`
 
 Once installed, there will be a script called `greplica` under Python's script directory. If `grep`
-is not found under PATH, then a script called `grep` will also be installed. Ensure Python's script
-directory is under PATH to be able to execute the script properly from command line.
+is not found on the system, then a script called `grep` will also be installed. Ensure Python's
+scripts directory is under the environment variable `PATH` in order to be able to execute the script
+properly from command line.
 
 ## CLI Help
 ```
@@ -229,106 +230,120 @@ clear_files(self)
 
 The following Grep options may be adjusted.
 ```py
-# Grep.SearchType: The search type which sets how expressions are parsed.
+# Determines how expressions are parsed
 search_type:Grep.SearchType = Grep.SearchType.BASIC_REGEXP
 
-# Boolean: when true, expression's case is ignored during search
+# When true, expression's case is ignored during search
 ignore_case:bool = False
 
-# Boolean: when true, regex search is performed using pattern \\b{expr}\\b
+# When true, regex search is performed using pattern \\b{expr}\\b
 word_regexp:bool = False
 
-# Boolean: when true, line regex search is used
+# When true, line regex search is used
 line_regexp:bool = False
 
-# Boolean: when true, no error messages are printed
+# When true, no error messages are printed
 no_messages:bool = False
 
-# Boolean: when true, matching lines are those that don't match expression
+# When true, matching lines are those that don't match expression
 invert_match:bool = False
 
-# None or int: when set, this is the maximum number of matching lines printed for each file
+# When set, this is the maximum number of matching lines printed for each file
 max_count:int = None
 
-# Boolean: when true, line number of match is printed before result
+# When true, line number of match is printed before result
 output_line_numbers:bool = False
 
-# Boolean: when true, file name is printed before result
+# When true, file name is printed before result
 output_file_name:bool = False
 
-# Boolean: when true, byte offset is printed before result
+# When true, byte offset is printed before result
 output_byte_offset:bool = False
 
-# Boolean: when true, each printed line is flushed before proceeding
+# When true, each printed line is flushed before proceeding
 line_buffered:bool = False
 
-# bytes: the sequence of bytes expected at the end of each line
-end:bytes = b'\n'
+# (property) The sequence of bytes expected at the end of each line
+# Returns bytes, can be set as str or bytes
+end = b'\n'
 
-# String: the string printed after header information and before line contents
+# The string printed after header information and before line contents
 results_sep:str = ':'
 
-# String: the string printed before line number if both file name and line number are printed
+# The string printed before line number if both file name and line number are printed
 name_num_sep:str = ':'
 
-# String: the string printed before byte offset value if byte offset as well as either file
-#         name or line number is printed.
+# The string printed before byte offset value if byte offset as well as either file
+# name or line number is printed.
 name_byte_sep:str = ':'
 
-# String: the string printed between each context group
+# The string printed between each context group
 context_sep:str = '--\n'
 
-# String: the string printed after header information and before context line contents
+# The string printed after header information and before context line contents
 context_results_sep:str = '-'
 
-# String: the string printed before context line number if both file name and line number are printed
+# The string printed before context line number if both file name and line number are printed
 context_name_num_sep:str = '-'
 
-# String: the string printed before context byte offset value if byte offset as well as either
-#         file name or line number is printed.
+# The string printed before context byte offset value if byte offset as well as either
+# file name or line number is printed.
 context_name_byte_sep:str = '-'
 
-# Boolean: output color ANSI escape sequences in output text when True
+# Output color ANSI escape sequences in output text when True
 output_color:bool = False
 
 # Grep.Directory: sets how directories are handled when they are included in file list
 directory_handling_type:Grep.Directory = Grep.Directory.READ
 
-# String: the label to print when output_file_name is true and stdin is parsed
+# The label to print when output_file_name is true and stdin is parsed
 label:str = '(standard input)'
 
-# Boolean: when true, normal output is not printed
+# When true, normal output is not printed
 quiet:bool = False
 
-# Boolean: when true, only the matching contents are printed for each line
+# When true, only the matching contents are printed for each line
 only_matching:bool = False
 
 # Grep.BinaryParseFunction: sets how binary files are handled
 binary_parse_function:Grep.BinaryParseFunction = Grep.BinaryParseFunction.PRINT_ERROR
 
-# Boolean: when true, CR are stripped from the end of every line when found
+# When true, CR are stripped from the end of every line when found
 strip_cr:bool = True
 
-# Integer: number of lines of context to print before a match
+# Number of lines of context to print before a match
 before_context_count:int = 0
 
-# Integer: number of lines of context to print after a match
+# Number of lines of context to print after a match
 after_context_count:int = 0
 
-# Boolean: when true, only the file name of matching files are printed
+# When true, only the file name of matching files are printed
 print_matching_files_only:bool = False
 
-# Boolean: when true, only the file name of non-matching files are printed
+# When true, only the file name of non-matching files are printed
 print_non_matching_files_only:bool = False
 
-# Boolean: when true, only count of number of matches for each file is printed
+# When true, only count of number of matches for each file is printed
 print_count_only:bool = False
 
-# Boolean: when true, add spaces to the left of numbers based on file size
+# When true, add spaces to the left of numbers based on file size
 space_numbers_by_size:bool = False
 
 # Dictionary: Contains grep color information
-# By default, this reads from environment to generate the dict - set to {} to use defaults
+# grep_color_dict gets initialized from environment variable GREP_COLORS; the default is:
+# {
+#     'mt':None,
+#     'ms':'01;31',
+#     'mc':'01;31',
+#     'sl':'',
+#     'cx':'',
+#     'rv':False,
+#     'fn':'35',
+#     'ln':'32',
+#     'bn':'32',
+#     'se':'36',
+#     'ne':False
+# }
 grep_color_dict:dict
 ```
 
@@ -336,7 +351,7 @@ At any point, reset() may be called to reset all settings.
 ```py
 reset(self)
   '''
-  Resets all Grep state values except for the out_file, err_file, and default_in_file.
+  Resets all Grep state values except for out_file, err_file, and default_in_file.
   '''
 ```
 
