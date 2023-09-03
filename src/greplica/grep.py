@@ -32,7 +32,7 @@ import fnmatch
 import glob
 from io import StringIO
 
-__version__ = '1.1.1'
+__version__ = '1.1.2'
 PACKAGE_NAME = 'greplica'
 
 class BinaryDetectedException(Exception):
