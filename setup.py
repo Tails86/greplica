@@ -1,5 +1,6 @@
 import setuptools
 import os
+import sys
 
 # This project is only packaged as sdist so that this setup.py script runs at the target
 
@@ -10,11 +11,31 @@ def _which(cmd):
     paths = os.environ.get('PATH', '')
     paths = paths.split(os.path.pathsep)
     dirs = [d for d in paths if os.path.isdir(d)]
+
+    if sys.platform.lower().startswith('win'):
+        # Windows environment variable PATHEXT specifies executable extensions
+        strip_ext = tuple([e.lower() for e in os.environ.get('PATHEXT', '').split(';')])
+        case_sensitive = False
+        cmd = cmd.lower()
+    else:
+        strip_ext = None
+        case_sensitive = True
+
     for dir_path in dirs:
-        for item in [f for f in os.listdir(dir_path) if f == cmd]:
-            item_path = os.path.join(dir_path, item)
-            if os.path.isfile(item_path) and os.access(item_path, os.X_OK):
-                return item_path
+        for item in os.listdir(dir_path):
+            if strip_ext and item.lower().endswith(strip_ext):
+                base_item = os.path.splitext(item)[0]
+            else:
+                base_item = item
+
+            if not case_sensitive:
+                base_item = base_item.lower()
+
+            if base_item == cmd:
+                item_path = os.path.join(dir_path, item)
+                if os.path.isfile(item_path) and os.access(item_path, os.X_OK):
+                    return item_path
+
     return None
 
 # Always have greplica as script
