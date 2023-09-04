@@ -72,11 +72,14 @@ if IS_WINDOWS:
             return True
 
 def en_tty_ansi_colors(fd):
-    if IS_WINDOWS:
-        return win_en_virtual_terminal(fd)
+    if fd.isatty():
+        if IS_WINDOWS:
+            return win_en_virtual_terminal(fd)
+        else:
+            # Nothing to do otherwise
+            return True
     else:
-        # Nothing to do otherwise
-        return True
+        return False
 
 class BinaryDetectedException(Exception):
     def __init__(self, *args: object) -> None:
@@ -1470,15 +1473,11 @@ class Grep:
         if self.color_mode == __class__.ColorMode.NEVER:
             color_enabled = False
         else:
-            if self.out_file.isatty():
-                ansi_colors_enabled = en_tty_ansi_colors(self.out_file)
-            else:
-                ansi_colors_enabled = False
+            color_enabled = en_tty_ansi_colors(self.out_file)
 
             if self.color_mode == __class__.ColorMode.ALWAYS:
+                # Enable color output regardless of return status
                 color_enabled = True
-            else:
-                color_enabled = ansi_colors_enabled
 
         data = self._init_line_parsing_data(color_enabled, return_matches)
         matched_files = []
