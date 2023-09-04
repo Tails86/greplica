@@ -35,6 +35,8 @@ from io import StringIO
 __version__ = '1.1.4'
 PACKAGE_NAME = 'greplica'
 
+IS_WINDOWS = sys.platform.lower().startswith('win')
+
 class BinaryDetectedException(Exception):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
@@ -1419,6 +1421,10 @@ class Grep:
         if not self._expressions:
             raise ValueError('No expressions provided')
 
+        if self.output_color and self.out_file.isatty() and IS_WINDOWS:
+            # Exploit a bug in Windows terminal - this forces ANSI encoding enabled
+            os.system('')
+
         data = self._init_line_parsing_data(return_matches)
         matched_files = []
 
@@ -1589,12 +1595,8 @@ class GrepArgParser:
             items.extend(values)
             setattr(namespace, self.dest, items)
 
-    @staticmethod
-    def _is_windows():
-        return sys.platform.lower().startswith('win')
-
     def _expand_cli_path(self, path):
-        if __class__._is_windows() and '*' in path or '?' in path:
+        if IS_WINDOWS and '*' in path or '?' in path:
             # Need to manually expand this out
             expanded_paths = [f for f in glob.glob(path)]
             if not expanded_paths:
@@ -1735,11 +1737,8 @@ class GrepArgParser:
         elif self._args.color == 'never':
             grep_object.output_color = False
         else:
-            # Auto - only enable color if not printing to file and stdout is a tty
-            if grep_object.out_file is not None:
-                grep_object.output_color = grep_object.out_file.isatty()
-            else:
-                grep_object.output_color = sys.stdout.isatty()
+            # Auto - only enable color if outputting to a TTY
+            grep_object.output_color = grep_object.out_file.isatty()
 
         if self._args.binary_files == 'text' or self._args.text:
             grep_object.binary_parse_function = Grep.BinaryParseFunction.IGNORE_DECODE_ERRORS
