@@ -32,7 +32,7 @@ import fnmatch
 import glob
 from io import StringIO
 
-__version__ = '1.1.4'
+__version__ = '1.1.5'
 PACKAGE_NAME = 'greplica'
 
 IS_WINDOWS = sys.platform.lower().startswith('win')
