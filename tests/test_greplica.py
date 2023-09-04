@@ -871,7 +871,7 @@ class GrepTests(unittest.TestCase):
         grep_obj.grep_color_dict = {} # Use default colors
         grep_obj.add_expressions('any')
         grep_obj.add_files('file1.txt', 'file2.txt', 'file3.txt')
-        grep_obj.output_color = True
+        grep_obj.color_mode = grep.Grep.ColorMode.ALWAYS
         grep_obj.output_file_name = True
         grep_obj.output_line_numbers = True
         grep_obj.output_byte_offset = True

@@ -290,8 +290,8 @@ context_name_num_sep:str = '-'
 # file name or line number is printed.
 context_name_byte_sep:str = '-'
 
-# Output color ANSI escape sequences in output text when True
-output_color:bool = False
+# Grep.ColorMode: sets the color mode
+self.color_mode:Grep.ColorMode = Grep.ColorMode.AUTO
 
 # Grep.Directory: sets how directories are handled when they are included in file list
 directory_handling_type:Grep.Directory = Grep.Directory.READ

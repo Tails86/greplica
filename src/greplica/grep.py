@@ -31,12 +31,52 @@ import re
 import fnmatch
 import glob
 from io import StringIO
-import subprocess
 
 __version__ = '1.1.5'
 PACKAGE_NAME = 'greplica'
 
 IS_WINDOWS = sys.platform.lower().startswith('win')
+
+if IS_WINDOWS:
+    try:
+        import ctypes
+        from ctypes import wintypes
+        import msvcrt
+
+        def _kernel32_check_bool(result, func, args):
+            if not result:
+                raise ctypes.WinError(ctypes.get_last_error())
+            return args
+
+        LPDWORD = ctypes.POINTER(wintypes.DWORD)
+        ctypes.windll.kernel32.GetConsoleMode.errcheck = _kernel32_check_bool
+        ctypes.windll.kernel32.GetConsoleMode.argtypes = (wintypes.HANDLE, LPDWORD)
+        ctypes.windll.kernel32.SetConsoleMode.errcheck = _kernel32_check_bool
+        ctypes.windll.kernel32.SetConsoleMode.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+
+        def win_en_virtual_terminal(fd):
+            try:
+                fd_handle = msvcrt.get_osfhandle(fd.fileno())
+                current_mode = wintypes.DWORD()
+                ctypes.windll.kernel32.GetConsoleMode(fd_handle, ctypes.byref(current_mode))
+                ctypes.windll.kernel32.SetConsoleMode(fd_handle, current_mode.value | 4)
+                return True
+            except:
+                return False
+    except:
+        # On any import/definition error, exploit the known Windows bug instead
+        import subprocess
+        def win_en_virtual_terminal(fd):
+            # This looks weird, but a bug in Windows causes ANSI to be enabled after this is called
+            subprocess.run('', shell=True)
+            return True
+
+def en_tty_ansi_colors(fd):
+    if IS_WINDOWS:
+        return win_en_virtual_terminal(fd)
+    else:
+        # Nothing to do otherwise
+        return True
 
 class BinaryDetectedException(Exception):
     def __init__(self, *args: object) -> None:
@@ -609,6 +649,11 @@ class Grep:
         IGNORE_DECODE_ERRORS = enum.auto()
         SKIP = enum.auto()
 
+    class ColorMode(Enum):
+        AUTO = enum.auto()
+        ALWAYS = enum.auto()
+        NEVER = enum.auto()
+
     class NullFileWriter(StringIO):
         ''' Fake out a file interface, and do nothing on write'''
         def write(self, __s: str) -> int:
@@ -700,8 +745,8 @@ class Grep:
         # String: the string printed before context byte offset value if byte offset as well as either
         #         file name or line number is printed.
         self.context_name_byte_sep:str = '-'
-        # Boolean: output color ANSI escape sequences in output text when True
-        self.output_color:bool = False
+        # Grep.ColorMode: sets the color mode
+        self.color_mode:__class__.ColorMode = __class__.ColorMode.AUTO
         # Grep.Directory: sets how directories are handled when they are included in file list
         self.directory_handling_type:__class__.Directory = __class__.Directory.READ
         # String: the label to print when output_file_name is true and stdin is parsed
@@ -1170,18 +1215,18 @@ class Grep:
             line_format += '{line}'
         return line_format
 
-    def _init_line_parsing_data(self, return_matches:bool):
+    def _init_line_parsing_data(self, color_enabled:bool, return_matches:bool):
         '''
         Initializes line parsing data which makes up the local running state of Grep.execute().
         '''
         data = __class__.LineParsingData()
 
+        data.color_enabled = color_enabled
         data.save_lines = return_matches
         data.ignore_case = self.ignore_case
         data.line_ending = self.end
         data.binary_parse_function = self.binary_parse_function
         data.strip_cr = self.strip_cr
-        data.color_enabled = self.output_color
         data.space_numbers_by_size = self.space_numbers_by_size
 
         # Only apply context values if only_matching is not set
@@ -1422,11 +1467,20 @@ class Grep:
         if not self._expressions:
             raise ValueError('No expressions provided')
 
-        if self.output_color and self.out_file.isatty() and IS_WINDOWS:
-            # Exploit a bug in Windows terminal - this forces ANSI encoding enabled
-            subprocess.run('', shell=True)
+        if self.color_mode == __class__.ColorMode.NEVER:
+            color_enabled = False
+        else:
+            if self.out_file.isatty():
+                ansi_colors_enabled = en_tty_ansi_colors(self.out_file)
+            else:
+                ansi_colors_enabled = False
 
-        data = self._init_line_parsing_data(return_matches)
+            if self.color_mode == __class__.ColorMode.ALWAYS:
+                color_enabled = True
+            else:
+                color_enabled = ansi_colors_enabled
+
+        data = self._init_line_parsing_data(color_enabled, return_matches)
         matched_files = []
 
         for file in data.files:
@@ -1734,12 +1788,11 @@ class GrepArgParser:
         grep_object.context_name_byte_sep = bytes(self._args.context_name_byte_sep, "utf-8").decode("unicode_escape")
 
         if self._args.color == 'always':
-            grep_object.output_color = True
+            grep_object.color_mode = Grep.ColorMode.ALWAYS
         elif self._args.color == 'never':
-            grep_object.output_color = False
+            grep_object.color_mode = Grep.ColorMode.NEVER
         else:
-            # Auto - only enable color if outputting to a TTY
-            grep_object.output_color = grep_object.out_file.isatty()
+            grep_object.color_mode = Grep.ColorMode.AUTO
 
         if self._args.binary_files == 'text' or self._args.text:
             grep_object.binary_parse_function = Grep.BinaryParseFunction.IGNORE_DECODE_ERRORS
