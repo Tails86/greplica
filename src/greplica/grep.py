@@ -31,6 +31,7 @@ import re
 import fnmatch
 import glob
 from io import StringIO
+import subprocess
 
 __version__ = '1.1.4'
 PACKAGE_NAME = 'greplica'
@@ -1423,7 +1424,7 @@ class Grep:
 
         if self.output_color and self.out_file.isatty() and IS_WINDOWS:
             # Exploit a bug in Windows terminal - this forces ANSI encoding enabled
-            os.system('')
+            subprocess.run('', shell=True)
 
         data = self._init_line_parsing_data(return_matches)
         matched_files = []
