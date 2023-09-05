@@ -31,6 +31,7 @@ import re
 import fnmatch
 import glob
 from io import StringIO
+from typing import Any
 
 __version__ = '1.1.7'
 PACKAGE_NAME = 'greplica'
@@ -923,6 +924,71 @@ class Grep:
 
         return grep_color_dict
 
+    class FileDat:
+        def __init__(self, filename, index):
+            self.filename = filename
+            self.index = index
+
+        def __eq__(self, __value: object) -> bool:
+            if not isinstance(__value, __class__):
+                return False
+            return (self.filename == __value.filename and self.index == __value.index)
+
+        def __str__(self) -> str:
+            return str((self.filename, self.index))
+
+    class LineDat:
+        def __init__(self, filename, line_num, byte_offset, line):
+            self.filename = filename
+            self.line_num = line_num
+            self.byte_offset = byte_offset
+            self.line = line
+
+        def __eq__(self, __value: object) -> bool:
+            if not isinstance(__value, __class__):
+                return False
+            return (
+                self.filename == __value.filename
+                and self.line_num == __value.line_num
+                and self.byte_offset == __value.byte_offset
+                and self.line == __value.line
+            )
+
+        def __str__(self) -> str:
+            return str((self.filename, self.line_num, self.byte_offset, self.line))
+
+    class InfoDat:
+        def __init__(self, filename, info):
+            self.filename = filename
+            self.info = info
+
+        def __eq__(self, __value: object) -> bool:
+            if not isinstance(__value, __class__):
+                return False
+            return (
+                self.filename == __value.filename
+                and self.info == __value.info
+            )
+
+        def __str__(self) -> str:
+            return str((self.filename, self.info))
+
+    class ErrorDat:
+        def __init__(self, filename, err_str):
+            self.filename = filename
+            self.err_str = err_str
+
+        def __eq__(self, __value: object) -> bool:
+            if not isinstance(__value, __class__):
+                return False
+            return (
+                self.filename == __value.filename
+                and self.err_str == __value.err_str
+            )
+
+        def __str__(self) -> str:
+            return str((self.filename, self.err_str))
+
     class LineParsingData:
         '''
         Holds various temporary state data in order to facilitate line parsing.
@@ -1073,23 +1139,30 @@ class Grep:
 
             return True
 
-        def print_line(self, line, end=None):
+        def print_line(self, line, line_num=None, byte_offset=None, end=None):
             if self.line_print_fn:
                 self.line_print_fn(line, end=end)
                 if self.save_lines:
-                    self.printed_data['lines'].append(line)
+                    dat = Grep.LineDat(self.file.name, line_num, byte_offset, line)
+                    self.printed_data['lines'].append(dat)
 
-        def print_info(self, info, end=None):
+        def print_info(self, info, filename=None, end=None):
             if self.info_print_fn:
                 self.info_print_fn(info, end=end)
                 if self.save_lines:
-                    self.printed_data['info'].append(info)
+                    if filename is None:
+                        filename = self.file.name
+                    dat = Grep.InfoDat(filename, info)
+                    self.printed_data['info'].append(dat)
 
-        def print_error(self, error, end=None):
+        def print_error(self, error, filename=None, end=None):
             if self.error_print_fn:
                 self.error_print_fn(error, end=end)
                 if self.save_lines:
-                    self.printed_data['errors'].append(error)
+                    if filename is None:
+                        filename = self.file.name
+                    dat = Grep.ErrorDat(filename, error)
+                    self.printed_data['errors'].append(dat)
 
         def _format_and_print_line(self, line_format, formatted_line, line_num, byte_offset, line_slices=[]):
             if not line_slices:
@@ -1109,7 +1182,7 @@ class Grep:
                     'byte_offset': AnsiString(self.number_format.format(byte_offset + slice_byte_offset)),
                     'line': formatted_line[line_slice]
                 })
-                self.print_line(line_format.format(**self.line_data_dict))
+                self.print_line(line_format.format(**self.line_data_dict), line_num=line_num, byte_offset=byte_offset)
 
             self.something_printed = True
 
@@ -1130,7 +1203,7 @@ class Grep:
                 and not self.binary_detected
             ):
                 # Print before context
-                if self.current_before_context and self.something_printed:
+                if self.current_before_context and self.something_printed and self.context_sep:
                     self.print_line(self.context_sep, end='')
                 for i, before_line in enumerate(self.current_before_context):
                     line_num = self.line_num - len(self.current_before_context) + i
@@ -1397,7 +1470,7 @@ class Grep:
         data.parse_complete(match_found)
         return match_found
 
-    def _parse_file(self, file:FileIterable, data:LineParsingData, matched_file_dict:dict):
+    def _parse_file(self, file:FileIterable, data:LineParsingData, matched_files:list):
         file_base_name = os.path.basename(file.name)
         marker = len(data.printed_data['lines'])
 
@@ -1448,10 +1521,11 @@ class Grep:
 
         if match_found:
             if marker != len(data.printed_data['lines']):
-                matched_file_dict[file.name] = marker
+                index = marker
             else:
                 # Lines aren't being printed due to option
-                matched_file_dict[file.name] = None
+                index = None
+            matched_files.append(Grep.FileDat(file.name, index))
 
         return match_found
 
@@ -1464,15 +1538,19 @@ class Grep:
                 break
         return exclude
 
-    def execute(self, return_matches=True):
+    class GrepResult:
+        def __init__(self, files, lines, info, errors):
+            self.files = files
+            self.lines = lines
+            self.info = info
+            self.errors = errors
+
+    def execute(self, return_matches=True) -> GrepResult:
         '''
         Executes Grep with all the assigned attributes.
-        Inputs: return_matches - set to True to fill in data as described below
-        Returns: a dictionary with the following key/values:
-                    'files': list of matched files
-                    'lines': list of matched lines or [] if return_matches if False
-                    'info': list of information lines or [] if return_matches if False
-                    'errors': list of error lines or [] if return_matches if False
+        Inputs: return_matches - set to True to fill in lines, info, and errors in the result
+                               - set to False if outputting to terminal is the only thing that is desired, saving memory
+        Returns: a GrepResult object
         Raises: ValueError if no expressions added
                 ValueError if no files added and no default input file set during init
         '''
@@ -1489,13 +1567,13 @@ class Grep:
                 color_enabled = True
 
         data = self._init_line_parsing_data(color_enabled, return_matches)
-        matched_file_dict = {}
+        matched_files = []
 
         for file in data.files:
             if os.path.isdir(file.name):
                 if not self._is_excluded_dir(file.name):
                     if self.directory_handling_type == __class__.Directory.READ:
-                        data.print_info('{}: {}: Is a directory'.format(PACKAGE_NAME, file.name))
+                        data.print_info('{}: {}: Is a directory'.format(PACKAGE_NAME, file.name), filename=file.name)
                     elif (
                         self.directory_handling_type == __class__.Directory.RECURSE
                         or self.directory_handling_type == __class__.Directory.RECURSE_LINKS
@@ -1505,16 +1583,20 @@ class Grep:
                             if not self._is_excluded_dir(root):
                                 for recurse_file in recurse_files:
                                     file_path = os.path.join(root, recurse_file)
-                                    self._parse_file(self._make_file_iterable(file_path), data, matched_file_dict)
+                                    self._parse_file(self._make_file_iterable(file_path), data, matched_files)
                             else:
                                 # Do nothing and exclude anything that follows
                                 dirs[:] = []
             else:
-                self._parse_file(file, data, matched_file_dict)
+                self._parse_file(file, data, matched_files)
 
-        out_dict = data.printed_data
-        out_dict['files'] = matched_file_dict
-        return out_dict
+        out_dat = __class__.GrepResult(
+            matched_files,
+            data.printed_data['lines'] if return_matches else None,
+            data.printed_data['info'] if return_matches else None,
+            data.printed_data['errors'] if return_matches else None
+        )
+        return out_dat
 
 class GrepArgParser:
     '''

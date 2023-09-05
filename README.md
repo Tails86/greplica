@@ -158,22 +158,37 @@ grep_obj.add_files('file1.txt', 'path/to/file2.txt', 'path/to/directory/')
 grep_obj.directory_handling_type = Grep.Directory.RECURSE
 data = grep_obj.execute()
 
-# Prints dictionary where key is file path string and value is index into data['lines'] or None.
-# None will be the value only when certain options prevent output to data['lines'].
-# ex: {'file1.txt':0, 'path/to/file2.txt':1}
-print(data['files'])
+# Prints a list of Grep.FileDat objects which contain filename and index. The value of
+# index is the index into data.lines where the matching lines for this file starts.
+# index will be None only when certain options prevent output to data.lines.
+# ex:
+# file1.txt, 0
+# path/to/file2.txt, 1
+for f in data.files:
+  print('{}, {}'.format(f.filename, f.index))
 
-# Prints list of matching lines.
-# ex: ['hello world', 'hello household']
-print(data['lines'])
+# Prints a list of Grep.LineDat objects which contain filename, line_num, byte_offset,
+# and line. Context separator will be its own element in this list when either
+# *_context_count values are greater than 0 and context_sep is not ''. In those cases,
+# line_num and byte_offset will be None.
+# ex:
+# file1.txt, 3, 117, hello world!
+# path/to/file2.txt, 8, 393, hello household
+for l in data.lines:
+  print('{}, {}, {}, {}'.format(l.filename, l.line_num, l.byte_offset, l.line))
 
-# Prints list of information lines like when binary file matches.
-# ex: ['path/to/directory/file.bin: binary file matches']
-print(data['info'])
+# Prints a list of Grep.InfoDat objects which contain filename and info.
+# ex:
+# path/to/directory/file.bin, path/to/directory/file.bin: binary file matches
+for i in data.info
+  print('{}, {}'.format(i.filename, i.info))
 
-# Prints list of error lines like when permission denied
-# ex: ['greplica: [Errno 13] Permission denied: 'path/to/directory/restricted/file.bin']
-print(data['errors'])
+# Prints a list of Grep.ErrorDat objects which contain filename and err_str.
+# ex:
+# path/to/directory/restricted/file.bin, greplica: [Errno 13] Permission denied:
+# 'path/to/directory/restricted/file.bin'
+for e in data.errors:
+  print('{}, {}'.format(e.filename, e.err_str))
 ```
 
 The following describes initialization arguments to Grep.

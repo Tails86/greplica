@@ -858,13 +858,16 @@ class GrepTests(unittest.TestCase):
         grep_obj.add_expressions('any')
         grep_obj.add_files('file1.txt', 'file2.txt', 'file3.txt')
         data = grep_obj.execute()
-        self.assertEqual(data['files'], {'file1.txt':0, 'file2.txt':1})
-        self.assertEqual(data['lines'], [
-            'And can event rapid any shall woman green.',
-            'Taken now you him trees tears any.'
+        self.assertEqual(data.files, [
+            grep.Grep.FileDat('file1.txt', 0),
+            grep.Grep.FileDat('file2.txt', 1)
         ])
-        self.assertEqual(data['info'], [])
-        self.assertEqual(data['errors'], [])
+        self.assertEqual(data.lines, [
+            grep.Grep.LineDat('file1.txt', 3, 117, 'And can event rapid any shall woman green.'),
+            grep.Grep.LineDat('file2.txt', 8, 393, 'Taken now you him trees tears any.')
+        ])
+        self.assertEqual(data.info, [])
+        self.assertEqual(data.errors, [])
 
     def test_lib_string_match_with_color_name_and_numbers(self):
         grep_obj = grep.Grep()
@@ -876,15 +879,20 @@ class GrepTests(unittest.TestCase):
         grep_obj.output_line_numbers = True
         grep_obj.output_byte_offset = True
         data = grep_obj.execute()
-        self.assertEqual(data['files'], {'file1.txt':0, 'file2.txt':1})
-        self.assertEqual(data['lines'], [
-            '\x1b[35mfile1.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m3\x1b[m\x1b[36m:\x1b[m\x1b[32m117\x1b[m\x1b[36m:\x1b[m'
-                'And can event rapid \x1b[01;31many\x1b[m shall woman green.',
-            '\x1b[35mfile2.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m8\x1b[m\x1b[36m:\x1b[m\x1b[32m393\x1b[m\x1b[36m:\x1b[m'
-                'Taken now you him trees tears \x1b[01;31many\x1b[m.'
+        self.assertEqual(data.files, [
+            grep.Grep.FileDat('file1.txt', 0),
+            grep.Grep.FileDat('file2.txt', 1)
         ])
-        self.assertEqual(data['info'], [])
-        self.assertEqual(data['errors'], [])
+        self.assertEqual(data.lines, [
+            grep.Grep.LineDat('file1.txt', 3, 117,
+                '\x1b[35mfile1.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m3\x1b[m\x1b[36m:\x1b[m\x1b[32m117\x1b[m\x1b[36m:\x1b[m'
+                'And can event rapid \x1b[01;31many\x1b[m shall woman green.'),
+            grep.Grep.LineDat('file2.txt', 8, 393,
+                '\x1b[35mfile2.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m8\x1b[m\x1b[36m:\x1b[m\x1b[32m393\x1b[m\x1b[36m:\x1b[m'
+                'Taken now you him trees tears \x1b[01;31many\x1b[m.')
+        ])
+        self.assertEqual(data.info, [])
+        self.assertEqual(data.errors, [])
 
     def test_lib_matching_files_only(self):
         grep_obj = grep.Grep()
@@ -892,10 +900,16 @@ class GrepTests(unittest.TestCase):
         grep_obj.add_files(['file1.txt', 'file2.txt', 'file3.txt'])
         grep_obj.print_matching_files_only = True
         data = grep_obj.execute()
-        self.assertEqual(data['files'], {'file1.txt':None, 'file2.txt':None})
-        self.assertEqual(data['lines'], [])
-        self.assertEqual(data['info'], ['file1.txt', 'file2.txt'])
-        self.assertEqual(data['errors'], [])
+        self.assertEqual(data.files, [
+            grep.Grep.FileDat('file1.txt', None),
+            grep.Grep.FileDat('file2.txt', None)
+        ])
+        self.assertEqual(data.lines, [])
+        self.assertEqual(data.info, [
+            grep.Grep.InfoDat('file1.txt', 'file1.txt'),
+            grep.Grep.InfoDat('file2.txt', 'file2.txt')
+        ])
+        self.assertEqual(data.errors, [])
 
     def test_lib_count_only(self):
         grep_obj = grep.Grep()
@@ -903,10 +917,17 @@ class GrepTests(unittest.TestCase):
         grep_obj.add_files(['file1.txt', 'file2.txt', 'file3.txt'])
         grep_obj.print_count_only = True
         data = grep_obj.execute()
-        self.assertEqual(data['files'], {'file1.txt':None, 'file2.txt':None})
-        self.assertEqual(data['lines'], [])
-        self.assertEqual(data['info'], ['file1.txt:1', 'file2.txt:1', 'file3.txt:0'])
-        self.assertEqual(data['errors'], [])
+        self.assertEqual(data.files, [
+            grep.Grep.FileDat('file1.txt', None),
+            grep.Grep.FileDat('file2.txt', None)
+        ])
+        self.assertEqual(data.lines, [])
+        self.assertEqual(data.info, [
+            grep.Grep.InfoDat('file1.txt', 'file1.txt:1'),
+            grep.Grep.InfoDat('file2.txt', 'file2.txt:1'),
+            grep.Grep.InfoDat('file3.txt', 'file3.txt:0')
+        ])
+        self.assertEqual(data.errors, [])
 
     def test_lib_print_directory(self):
         grep_obj = grep.Grep()
@@ -914,10 +935,12 @@ class GrepTests(unittest.TestCase):
         grep_obj.add_expressions('any')
         grep_obj.directory_handling_type = grep.Grep.Directory.READ
         data = grep_obj.execute()
-        self.assertEqual(data['files'], {})
-        self.assertEqual(data['lines'], [])
-        self.assertEqual(data['info'], ['greplica: .: Is a directory'])
-        self.assertEqual(data['errors'], [])
+        self.assertEqual(data.files, [])
+        self.assertEqual(data.lines, [])
+        self.assertEqual(data.info, [
+            grep.Grep.InfoDat('.', 'greplica: .: Is a directory')
+        ])
+        self.assertEqual(data.errors, [])
 
     def test_lib_access_error(self):
         with patch('greplica.grep.AutoInputFileIterable', PermissionErrorMockAutoInputFileIterable):
@@ -925,13 +948,13 @@ class GrepTests(unittest.TestCase):
             grep_obj.add_files('file1.txt', 'file2.txt', 'file3.txt')
             grep_obj.add_expressions('any')
             data = grep_obj.execute()
-            self.assertEqual(data['files'], {})
-            self.assertEqual(data['lines'], [])
-            self.assertEqual(data['info'], [])
-            self.assertEqual(data['errors'], [
-                "greplica: [Errno 13] Permission denied: 'file1.txt'",
-                "greplica: [Errno 13] Permission denied: 'file2.txt'",
-                "greplica: [Errno 13] Permission denied: 'file3.txt'"
+            self.assertEqual(data.files, [])
+            self.assertEqual(data.lines, [])
+            self.assertEqual(data.info, [])
+            self.assertEqual(data.errors, [
+                grep.Grep.ErrorDat('file1.txt', "greplica: [Errno 13] Permission denied: 'file1.txt'"),
+                grep.Grep.ErrorDat('file2.txt', "greplica: [Errno 13] Permission denied: 'file2.txt'"),
+                grep.Grep.ErrorDat('file3.txt', "greplica: [Errno 13] Permission denied: 'file3.txt'")
             ])
 
     def test_lib_binary_matches_print_to_info(self):
@@ -944,7 +967,9 @@ class GrepTests(unittest.TestCase):
             grep_obj.add_files(binary_file_path)
             grep_obj.add_expressions('eggs')
             data = grep_obj.execute()
-            self.assertEqual(data['info'], [f'{binary_file_path}: binary file matches'])
+            self.assertEqual(data.info, [
+                grep.Grep.InfoDat(binary_file_path, f'{binary_file_path}: binary file matches')
+            ])
         finally:
             tmp_dir.cleanup()
 
