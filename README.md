@@ -157,10 +157,23 @@ grep_obj.add_expressions('hello .*ld')
 grep_obj.add_files('file1.txt', 'path/to/file2.txt', 'path/to/directory/')
 grep_obj.directory_handling_type = Grep.Directory.RECURSE
 data = grep_obj.execute()
-print(data['files']) # Prints filepaths where match found
-print(data['lines']) # Prints the matching lines
-print(data['info']) # Prints information lines like when binary file matches
-print(data['errors']) # Prints error lines like when permission denied
+
+# Prints dictionary where key is file path string and value is index into data['lines'] or None.
+# None will be the value only when certain options prevent output to data['lines'].
+# ex: {'file1.txt':0, 'path/to/file2.txt':1}
+print(data['files'])
+
+# Prints list of matching lines.
+# ex: ['hello world', 'hello household']
+print(data['lines'])
+
+# Prints list of information lines like when binary file matches.
+# ex: ['path/to/directory/file.bin: binary file matches']
+print(data['info'])
+
+# Prints list of error lines like when permission denied
+# ex: ['greplica: [Errno 13] Permission denied: 'path/to/directory/restricted/file.bin']
+print(data['errors'])
 ```
 
 The following describes initialization arguments to Grep.

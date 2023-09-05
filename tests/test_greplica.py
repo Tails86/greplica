@@ -858,7 +858,7 @@ class GrepTests(unittest.TestCase):
         grep_obj.add_expressions('any')
         grep_obj.add_files('file1.txt', 'file2.txt', 'file3.txt')
         data = grep_obj.execute()
-        self.assertEqual(data['files'], ['file1.txt', 'file2.txt'])
+        self.assertEqual(data['files'], {'file1.txt':0, 'file2.txt':1})
         self.assertEqual(data['lines'], [
             'And can event rapid any shall woman green.',
             'Taken now you him trees tears any.'
@@ -876,7 +876,7 @@ class GrepTests(unittest.TestCase):
         grep_obj.output_line_numbers = True
         grep_obj.output_byte_offset = True
         data = grep_obj.execute()
-        self.assertEqual(data['files'], ['file1.txt', 'file2.txt'])
+        self.assertEqual(data['files'], {'file1.txt':0, 'file2.txt':1})
         self.assertEqual(data['lines'], [
             '\x1b[35mfile1.txt\x1b[m\x1b[36m:\x1b[m\x1b[32m3\x1b[m\x1b[36m:\x1b[m\x1b[32m117\x1b[m\x1b[36m:\x1b[m'
                 'And can event rapid \x1b[01;31many\x1b[m shall woman green.',
@@ -892,7 +892,7 @@ class GrepTests(unittest.TestCase):
         grep_obj.add_files(['file1.txt', 'file2.txt', 'file3.txt'])
         grep_obj.print_matching_files_only = True
         data = grep_obj.execute()
-        self.assertEqual(data['files'], ['file1.txt', 'file2.txt'])
+        self.assertEqual(data['files'], {'file1.txt':None, 'file2.txt':None})
         self.assertEqual(data['lines'], [])
         self.assertEqual(data['info'], ['file1.txt', 'file2.txt'])
         self.assertEqual(data['errors'], [])
@@ -903,7 +903,7 @@ class GrepTests(unittest.TestCase):
         grep_obj.add_files(['file1.txt', 'file2.txt', 'file3.txt'])
         grep_obj.print_count_only = True
         data = grep_obj.execute()
-        self.assertEqual(data['files'], ['file1.txt', 'file2.txt'])
+        self.assertEqual(data['files'], {'file1.txt':None, 'file2.txt':None})
         self.assertEqual(data['lines'], [])
         self.assertEqual(data['info'], ['file1.txt:1', 'file2.txt:1', 'file3.txt:0'])
         self.assertEqual(data['errors'], [])
@@ -914,7 +914,7 @@ class GrepTests(unittest.TestCase):
         grep_obj.add_expressions('any')
         grep_obj.directory_handling_type = grep.Grep.Directory.READ
         data = grep_obj.execute()
-        self.assertEqual(data['files'], [])
+        self.assertEqual(data['files'], {})
         self.assertEqual(data['lines'], [])
         self.assertEqual(data['info'], ['greplica: .: Is a directory'])
         self.assertEqual(data['errors'], [])
@@ -925,7 +925,7 @@ class GrepTests(unittest.TestCase):
             grep_obj.add_files('file1.txt', 'file2.txt', 'file3.txt')
             grep_obj.add_expressions('any')
             data = grep_obj.execute()
-            self.assertEqual(data['files'], [])
+            self.assertEqual(data['files'], {})
             self.assertEqual(data['lines'], [])
             self.assertEqual(data['info'], [])
             self.assertEqual(data['errors'], [

@@ -1397,8 +1397,9 @@ class Grep:
         data.parse_complete(match_found)
         return match_found
 
-    def _parse_file(self, file, data):
+    def _parse_file(self, file:FileIterable, data:LineParsingData, matched_file_dict:dict):
         file_base_name = os.path.basename(file.name)
+        marker = len(data.printed_data['lines'])
 
         included = False
         for g in self._file_include_globs:
@@ -1444,6 +1445,14 @@ class Grep:
                     data.print_info(data.line_format.format(**data.line_data_dict))
             except BinaryDetectedException:
                 pass # Skip the rest of the file and continue
+
+        if match_found:
+            if marker != len(data.printed_data['lines']):
+                matched_file_dict[file.name] = marker
+            else:
+                # Lines aren't being printed due to option
+                matched_file_dict[file.name] = None
+
         return match_found
 
     def _is_excluded_dir(self, dir_path):
@@ -1480,7 +1489,7 @@ class Grep:
                 color_enabled = True
 
         data = self._init_line_parsing_data(color_enabled, return_matches)
-        matched_files = []
+        matched_file_dict = {}
 
         for file in data.files:
             if os.path.isdir(file.name):
@@ -1496,17 +1505,15 @@ class Grep:
                             if not self._is_excluded_dir(root):
                                 for recurse_file in recurse_files:
                                     file_path = os.path.join(root, recurse_file)
-                                    if self._parse_file(self._make_file_iterable(file_path), data):
-                                        matched_files += [file_path]
+                                    self._parse_file(self._make_file_iterable(file_path), data, matched_file_dict)
                             else:
                                 # Do nothing and exclude anything that follows
                                 dirs[:] = []
             else:
-                if self._parse_file(file, data):
-                    matched_files += [file.name]
+                self._parse_file(file, data, matched_file_dict)
 
         out_dict = data.printed_data
-        out_dict['files'] = matched_files
+        out_dict['files'] = matched_file_dict
         return out_dict
 
 class GrepArgParser:
