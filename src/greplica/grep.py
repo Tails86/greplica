@@ -926,8 +926,8 @@ class Grep:
 
     class FileDat:
         def __init__(self, filename, index):
-            self.filename = filename
-            self.index = index
+            self.filename:str = filename
+            self.index:int = index
 
         def __eq__(self, __value: object) -> bool:
             if not isinstance(__value, __class__):
@@ -939,10 +939,10 @@ class Grep:
 
     class LineDat:
         def __init__(self, filename, line_num, byte_offset, line):
-            self.filename = filename
-            self.line_num = line_num
-            self.byte_offset = byte_offset
-            self.line = line
+            self.filename:str = filename
+            self.line_num:int = line_num
+            self.byte_offset:int = byte_offset
+            self.line:str = line
 
         def __eq__(self, __value: object) -> bool:
             if not isinstance(__value, __class__):
@@ -959,8 +959,8 @@ class Grep:
 
     class InfoDat:
         def __init__(self, filename, info):
-            self.filename = filename
-            self.info = info
+            self.filename:str = filename
+            self.info:str = info
 
         def __eq__(self, __value: object) -> bool:
             if not isinstance(__value, __class__):
@@ -975,8 +975,8 @@ class Grep:
 
     class ErrorDat:
         def __init__(self, filename, err_str):
-            self.filename = filename
-            self.err_str = err_str
+            self.filename:str = filename
+            self.err_str:str = err_str
 
         def __eq__(self, __value: object) -> bool:
             if not isinstance(__value, __class__):
@@ -1540,10 +1540,10 @@ class Grep:
 
     class GrepResult:
         def __init__(self, files, lines, info, errors):
-            self.files = files
-            self.lines = lines
-            self.info = info
-            self.errors = errors
+            self.files:list[Grep.FileDat] = files
+            self.lines:list[Grep.LineDat] = lines
+            self.info:list[Grep.InfoDat] = info
+            self.errors:list[Grep.ErrorDat] = errors
 
     def execute(self, return_matches=True) -> GrepResult:
         '''
