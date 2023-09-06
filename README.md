@@ -5,7 +5,7 @@ A grep clone in Python with both CLI and library interfaces, supporting ANSI col
 ## Known Differences with grep
 
 - The -D, --devices option is not supported and no support is planned. All inputs are handled as
-file streams only, and there is no way to adjust this.
+file streams only.
 - Context cannot be given as raw number -NUM.
 - The Python module `re` is internally used for all regular expressions. The inputted regular
 expression is modified only when basic regular expressions are used. See --help for more
@@ -18,7 +18,7 @@ Feel free to open a bug report or make a merge request on [github](https://githu
 ## Installation
 This project is uploaded to PyPI at https://pypi.org/project/greplica/
 
-To install, ensure you are connected to the internet and execute: `python3 -m pip install greplica`
+To install, ensure you are connected to the internet and execute: `python3 -m pip install greplica --upgrade`
 
 Once installed, there will be a script called `greplica` under Python's script directory. If `grep`
 is not found on the system, then a script called `grep` will also be installed. Ensure Python's
@@ -388,12 +388,10 @@ The following method executes using all data set above.
 execute(self, return_matches=True)
   '''
   Executes Grep with all the assigned attributes.
-  Inputs: return_matches - set to True to fill in data as described below
-  Returns: a dictionary with the following key/values:
-              'files': list of matched files
-              'lines': list of matched lines or [] if return_matches if False
-              'info': list of information lines or [] if return_matches if False
-              'errors': list of error lines or [] if return_matches if False
+  Inputs: return_matches - set to True to fill in lines, info, and errors in the result
+                         - set to False if outputting to terminal is the only thing that is
+                           desired, saving memory
+  Returns: a GrepResult object
   Raises: ValueError if no expressions added
           ValueError if no files added and no default input file set during init
   '''
