@@ -860,7 +860,7 @@ class GrepTests(unittest.TestCase):
         grep_obj.add_files('file1.txt', 'file2.txt', 'file3.txt')
         data = grep_obj.execute()
         self.assertEqual(data.files, [
-            grep.Grep.FileDat('file1.txt', 0, 1, 0),
+            grep.Grep.FileDat('file1.txt', 0, 1, 1),
             grep.Grep.FileDat('file2.txt', 1, 2, 1)
         ])
         self.assertEqual(data.lines, [
@@ -902,8 +902,8 @@ class GrepTests(unittest.TestCase):
         grep_obj.print_matching_files_only = True
         data = grep_obj.execute()
         self.assertEqual(data.files, [
-            grep.Grep.FileDat('file1.txt', None, None, 0),
-            grep.Grep.FileDat('file2.txt', None, None, 0)
+            grep.Grep.FileDat('file1.txt', None, None, 1),
+            grep.Grep.FileDat('file2.txt', None, None, 1)
         ])
         self.assertEqual(data.lines, [])
         self.assertEqual(data.info, [
@@ -919,8 +919,8 @@ class GrepTests(unittest.TestCase):
         grep_obj.print_count_only = True
         data = grep_obj.execute()
         self.assertEqual(data.files, [
-            grep.Grep.FileDat('file1.txt', None, None, 0),
-            grep.Grep.FileDat('file2.txt', None, None, 0)
+            grep.Grep.FileDat('file1.txt', None, None, 1),
+            grep.Grep.FileDat('file2.txt', None, None, 1)
         ])
         self.assertEqual(data.lines, [])
         self.assertEqual(data.info, [

@@ -961,10 +961,15 @@ class Grep:
         def __eq__(self, __value: object) -> bool:
             if not isinstance(__value, __class__):
                 return False
-            return (self.filename == __value.filename and self.index == __value.index)
+            return (
+                self.filename == __value.filename
+                and self.start_index == __value.start_index
+                and self.stop_index == __value.stop_index
+                and self.num_matches == __value.num_matches
+            )
 
         def __str__(self) -> str:
-            return str((self.filename, self.index))
+            return str((self.filename, self.start_index, self.stop_index, self.num_matches))
 
     class LineDat:
         def __init__(self, filename:str, line_num:int, byte_offset:int, line:str):
