@@ -428,10 +428,11 @@ class GrepTests(unittest.TestCase):
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out:
             grep.main(['--color=never', 'any', '-r', '-h'])
             lines = fake_out.getvalue().split('\n')
-        self.assertEqual(len(lines), 3)
-        self.assertEqual(lines[0], 'And can event rapid any shall woman green.')
-        self.assertEqual(lines[1], 'Taken now you him trees tears any.')
-        self.assertEqual(lines[2], '')
+        self.assertEqual(lines, [
+            'And can event rapid any shall woman green.',
+            'Taken now you him trees tears any.',
+            ''
+        ])
 
     def test_stdin_custom_label(self):
         with patch('greplica.grep.sys.stdout', new = StringIO()) as fake_out, \

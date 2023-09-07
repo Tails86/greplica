@@ -1601,6 +1601,8 @@ class Grep:
                         followlinks = (self.directory_handling_type == __class__.Directory.RECURSE_LINKS)
                         for root, dirs, recurse_files in os.walk(file.name, followlinks=followlinks):
                             if not self._is_excluded_dir(root):
+                                dirs.sort()
+                                recurse_files.sort()
                                 for recurse_file in recurse_files:
                                     file_path = os.path.join(root, recurse_file)
                                     self._parse_file(self._make_file_iterable(file_path), data, matched_files)
