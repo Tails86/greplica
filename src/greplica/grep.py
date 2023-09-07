@@ -30,8 +30,9 @@ import enum
 import re
 import fnmatch
 import glob
+import io
 from io import StringIO
-from typing import Any
+from typing import Any, Union, List
 
 __version__ = '1.2.0'
 PACKAGE_NAME = 'greplica'
@@ -55,7 +56,7 @@ if IS_WINDOWS:
         ctypes.windll.kernel32.SetConsoleMode.errcheck = _kernel32_check_bool
         ctypes.windll.kernel32.SetConsoleMode.argtypes = (wintypes.HANDLE, wintypes.DWORD)
 
-        def win_en_virtual_terminal(fd):
+        def win_en_virtual_terminal(fd:io.IOBase) -> bool:
             try:
                 fd_handle = msvcrt.get_osfhandle(fd.fileno())
                 current_mode = wintypes.DWORD()
@@ -67,12 +68,12 @@ if IS_WINDOWS:
     except:
         # On any import/definition error, exploit the known Windows bug instead
         import subprocess
-        def win_en_virtual_terminal(fd):
+        def win_en_virtual_terminal(fd) -> bool:
             # This looks weird, but a bug in Windows causes ANSI to be enabled after this is called
             subprocess.run('', shell=True)
             return True
 
-def en_tty_ansi_colors(fd):
+def en_tty_ansi_colors(fd:io.IOBase) -> bool:
     if fd.isatty():
         if IS_WINDOWS:
             return win_en_virtual_terminal(fd)
@@ -94,22 +95,22 @@ class FileIterable:
     def __iter__(self):
         return None
 
-    def __next__(self):
+    def __next__(self) -> Union[str, bytes]:
         return None
 
     @property
-    def name(self):
+    def name(self) -> str:
         return None
 
     @property
-    def eof(self):
+    def eof(self) -> bool:
         return False
 
 class AutoInputFileIterable(FileIterable):
     '''
     Automatically opens file on iteration and returns lines as bytes or strings.
     '''
-    def __init__(self, file_path, file_mode='rb', newline_str='\n'):
+    def __init__(self, file_path:str, file_mode:str='rb', newline_str:str='\n'):
         self._file_path = file_path
         self._file_mode = file_mode
         self._newline_str = newline_str
@@ -126,14 +127,14 @@ class AutoInputFileIterable(FileIterable):
             self._fp.close()
             self._fp = None
 
-    def __iter__(self):
+    def __iter__(self) -> FileIterable:
         # Custom iteration
         if self._fp:
             self._fp.close()
         self._fp = open(self._file_path, self._file_mode)
         return self
 
-    def __next__(self):
+    def __next__(self) -> Union[str, bytes]:
         # Custom iteration
         if self._fp:
             b = b''
@@ -168,18 +169,18 @@ class AutoInputFileIterable(FileIterable):
             raise StopIteration
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self._file_path
 
     @property
-    def eof(self):
+    def eof(self) -> bool:
         return (self._fp is None)
 
 class InputStreamIterable(FileIterable):
     '''
     Reads from existing file and returns lines as bytes or strings.
     '''
-    def __init__(self, in_file=sys.stdin, as_bytes=True, end='\n', label='(standard input)'):
+    def __init__(self, in_file:io.IOBase=sys.stdin, as_bytes:bool=True, end:str='\n', label:str='(standard input)'):
         self._in_file = in_file
         self._as_bytes = as_bytes
         self._end = end
@@ -188,12 +189,12 @@ class InputStreamIterable(FileIterable):
             self._end = self._end.encode()
         self._eof_detected = False
 
-    def __iter__(self):
+    def __iter__(self) -> FileIterable:
         # Custom iteration
         self._eof_detected = False
         return self
 
-    def __next__(self):
+    def __next__(self) -> Union[str, bytes]:
         # Custom iteration
         if self._eof_detected:
             raise StopIteration
@@ -220,11 +221,11 @@ class InputStreamIterable(FileIterable):
                 return b
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self._label
 
     @property
-    def eof(self):
+    def eof(self) -> bool:
         return self._eof_detected
 
 class AnsiFormat(Enum):
@@ -349,7 +350,7 @@ class AnsiString:
         '''
         Internal use only - mainly used to create a unique objects which may contain same strings
         '''
-        def __init__(self, setting_or_settings):
+        def __init__(self, setting_or_settings:Union[List[str], str, List[AnsiFormat], AnsiFormat]):
             if not isinstance(setting_or_settings, list):
                 settings = [setting_or_settings]
             else:
@@ -370,7 +371,7 @@ class AnsiString:
         def __str__(self):
             return self._str
 
-    def __init__(self, s='', setting_or_settings=None):
+    def __init__(self, s:str='', setting_or_settings:Union[List[str], str, List[AnsiFormat], AnsiFormat]=None):
         self._s = s
         # Key is the string index to make a color change at
         # Each value element is a list of 2 lists
@@ -387,14 +388,14 @@ class AnsiString:
         self._s = s
 
     @property
-    def base_str(self):
+    def base_str(self) -> str:
         '''
         Returns the base string without any formatting set.
         '''
         return self._s
 
     @staticmethod
-    def _insert_settings_to_dict(settings_dict, idx, apply, settings, topmost=True):
+    def _insert_settings_to_dict(settings_dict:dict, idx:int, apply:bool, settings:Settings, topmost:bool=True):
         if idx not in settings_dict:
             settings_dict[idx] = [[] for _ in range(__class__.SETTINGS_ITEM_LIST_LEN)]
         list_idx = __class__.SETTINGS_APPLY_IDX if apply else __class__.SETTINGS_REMOVE_IDX
@@ -403,10 +404,16 @@ class AnsiString:
         else:
             settings_dict[idx][list_idx].insert(0, settings)
 
-    def _insert_settings(self, idx, apply, settings, topmost=True):
+    def _insert_settings(self, idx:int, apply:bool, settings:Settings, topmost:bool=True):
         __class__._insert_settings_to_dict(self._color_settings, idx, apply, settings, topmost)
 
-    def apply_formatting(self, setting_or_settings, start_idx=0, length=None, topmost=True):
+    def apply_formatting(
+            self,
+            setting_or_settings:Union[List[str], str, List[AnsiFormat], AnsiFormat],
+            start_idx=0,
+            length=None,
+            topmost=True
+    ):
         '''
         Sets the formatting for a given range of characters.
         Inputs: setting_or_settings - Can either be a single item or list of items;
@@ -435,7 +442,12 @@ class AnsiString:
             # Remove settings
             self._insert_settings(start_idx + length, False, settings, topmost)
 
-    def apply_formatting_for_match(self, setting_or_settings, match_object, group=0):
+    def apply_formatting_for_match(
+            self,
+            setting_or_settings:Union[List[str], str, List[AnsiFormat], AnsiFormat],
+            match_object:re.Match,
+            group:int=0
+    ):
         '''
         Apply formatting using a match object generated from re
         '''
@@ -450,7 +462,7 @@ class AnsiString:
         self._color_settings = {}
 
     class SettingsIterator:
-        def __init__(self, settings_dict):
+        def __init__(self, settings_dict:dict):
             self.settings_dict = settings_dict
             self.current_settings = []
             self.dict_iter = iter(sorted(self.settings_dict))
@@ -458,7 +470,7 @@ class AnsiString:
         def __iter__(self):
             return self
 
-        def __next__(self):
+        def __next__(self) -> tuple:
             # Will raise StopIteration when complete
             idx = next(self.dict_iter)
             settings = self.settings_dict[idx]
@@ -472,7 +484,7 @@ class AnsiString:
             self.current_settings += settings[AnsiString.SETTINGS_APPLY_IDX]
             return (idx, settings, self.current_settings)
 
-    def _slice_val_to_idx(self, val, default):
+    def _slice_val_to_idx(self, val:int, default:int) -> int:
         if val is None:
             return default
         elif val < 0:
@@ -483,7 +495,7 @@ class AnsiString:
         else:
             return val
 
-    def __getitem__(self, val):
+    def __getitem__(self, val:Union[int, slice]):
         ''' Returns a AnsiString object which represents a substring of self '''
         if isinstance(val, int):
             st = val
@@ -518,13 +530,13 @@ class AnsiString:
             last_settings = list(current_settings)
         return new_s
 
-    def __str__(self):
+    def __str__(self) -> str:
         '''
         Returns an ANSI format string with only internal formatting set.
         '''
         return self.__format__(None)
 
-    def __format__(self, __format_spec):
+    def __format__(self, __format_spec:str) -> str:
         '''
         Returns an ANSI format string with both internal and given formatting spec set.
         '''
@@ -609,7 +621,7 @@ DEFAULT_GREP_ANSI_COLORS = {
     'ne':False
 }
 
-def _expression_escape_invert(expression, chars):
+def _expression_escape_invert(expression:str, chars:str) -> str:
     '''
     Inverts regex expression escape characters. This is helpful to transform format string from basic
     to extended regex format (and vice-versa).
@@ -624,7 +636,7 @@ def _expression_escape_invert(expression, chars):
         expression = char.join(new_expression_split)
     return expression
 
-def _parse_expressions(expressions):
+def _parse_expressions(expressions:str) -> str:
     # Split for both \r\n and \n
     expressions = [y for x in expressions.split('\r\n') for y in x.split('\n')]
     # Ignore last new line, if any
@@ -663,7 +675,7 @@ class Grep:
         def write(self, __s: str) -> int:
             pass
 
-        def writelines(self, __lines) -> None:
+        def writelines(self, __lines:List[str]) -> None:
             pass
 
         def flush(self) -> None:
@@ -672,7 +684,7 @@ class Grep:
         def isatty(self) -> bool:
             return False
 
-    def __init__(self, out_file=None, err_file=None, default_in_file=None):
+    def __init__(self, out_file:io.IOBase=None, err_file:io.IOBase=None, default_in_file:io.IOBase=None):
         '''
         Initializes Grep
         Inputs: out_file - a file object to pass to print() as 'file' for regular messages.
@@ -779,7 +791,7 @@ class Grep:
         # By default, this reads from environment to generate the dict - set to {} to use defaults
         self.grep_color_dict:dict = __class__._generate_color_dict()
 
-    def add_expressions(self, *args):
+    def add_expressions(self, *args:Union[str, List[str]]):
         '''
         Adds a single expression or list of expressions that Grep will search for in selected files.
         Inputs: all arguments must be list of strings or string - each string is an expression
@@ -798,7 +810,7 @@ class Grep:
         '''
         self._expressions.clear()
 
-    def add_files(self, *args):
+    def add_files(self, *args:Union[str, List[str]]):
         '''
         Adds a single file or list of files that Grep will crawl through. Each entry must be a path
         to a file or directory. Directories are handled based on value of directory_handling_type.
@@ -818,7 +830,7 @@ class Grep:
         '''
         self._files = []
 
-    def add_file_include_globs(self, *args):
+    def add_file_include_globs(self, *args:Union[str, List[str]]):
         '''
         Limit files to those matching given globs.
         '''
@@ -833,7 +845,7 @@ class Grep:
     def clear_file_include_globs(self):
         self._file_include_globs = []
 
-    def add_file_exclude_globs(self, *args):
+    def add_file_exclude_globs(self, *args:Union[str, List[str]]):
         '''
         Skip files that match given globs.
         '''
@@ -848,7 +860,7 @@ class Grep:
     def clear_file_exclude_globs(self):
         self._file_exclude_globs = []
 
-    def add_dir_exclude_globs(self, *args):
+    def add_dir_exclude_globs(self, *args:Union[str, List[str]]):
         '''
         Skip directories that match given globs.
         '''
@@ -864,21 +876,21 @@ class Grep:
         self._dir_exclude_globs = []
 
     @property
-    def out_file(self):
+    def out_file(self) -> io.IOBase:
         '''
         The output file, if any (to be passed to print())
         '''
         return self._out_file
 
     @property
-    def err_file(self):
+    def err_file(self) -> io.IOBase:
         '''
         The error file, if any (to be passed to print() on errors)
         '''
         return self._err_file
 
     @property
-    def default_in_file(self):
+    def default_in_file(self) -> io.IOBase:
         '''
         The default input file, if any (to be used when no files set)
         '''
@@ -892,14 +904,14 @@ class Grep:
         return self._end
 
     @end.setter
-    def end(self, end):
+    def end(self, end:Union[str, bytes]):
         # Force end to be of type bytes if str given
         if isinstance(end, str):
             end = end.encode()
         self._end = end
 
     @staticmethod
-    def _generate_color_dict():
+    def _generate_color_dict() -> dict:
         grep_color_dict = dict(DEFAULT_GREP_ANSI_COLORS)
         if 'GREP_COLORS' in os.environ:
             colors = os.environ['GREP_COLORS'].split(':')
@@ -925,9 +937,17 @@ class Grep:
         return grep_color_dict
 
     class FileDat:
-        def __init__(self, filename, index):
+        def __init__(self, filename:str, start_index:int, stop_index:int, num_matches:int):
             self.filename:str = filename
-            self.index:int = index
+            self.start_index:int = start_index
+            self.stop_index:int = stop_index
+            # Number of matches which won't include context separator lines
+            self.num_matches:int = num_matches
+
+        @property
+        def index(self) -> int:
+            ''' Alias for start_index '''
+            return self.start_index
 
         def __eq__(self, __value: object) -> bool:
             if not isinstance(__value, __class__):
@@ -938,7 +958,7 @@ class Grep:
             return str((self.filename, self.index))
 
     class LineDat:
-        def __init__(self, filename, line_num, byte_offset, line):
+        def __init__(self, filename:str, line_num:int, byte_offset:int, line:str):
             self.filename:str = filename
             self.line_num:int = line_num
             self.byte_offset:int = byte_offset
@@ -958,7 +978,7 @@ class Grep:
             return str((self.filename, self.line_num, self.byte_offset, self.line))
 
     class InfoDat:
-        def __init__(self, filename, info):
+        def __init__(self, filename:str, info:str):
             self.filename:str = filename
             self.info:str = info
 
@@ -974,7 +994,7 @@ class Grep:
             return str((self.filename, self.info))
 
     class ErrorDat:
-        def __init__(self, filename, err_str):
+        def __init__(self, filename:str, err_str:str):
             self.filename:str = filename
             self.err_str:str = err_str
 
@@ -1036,7 +1056,7 @@ class Grep:
             self.number_format = '{}'
             self.print_status_messages = True
 
-        def set_file(self, file):
+        def set_file(self, file:FileIterable):
             '''
             Prints any errors detected of previous file and sets the file currently being parsed
             '''
@@ -1064,7 +1084,7 @@ class Grep:
                     pass
                 self.file_iter = None
 
-        def next_line(self):
+        def next_line(self) -> bool:
             '''
             Grabs the next line from the file and formats the line as necessary.
             Returns: True if line has been read or False if end of file reached.
@@ -1139,14 +1159,14 @@ class Grep:
 
             return True
 
-        def print_line(self, line, line_num=None, byte_offset=None, end=None):
+        def print_line(self, line:str, line_num:int=None, byte_offset:int=None, end:str=None):
             if self.line_print_fn:
                 self.line_print_fn(line, end=end)
                 if self.save_lines:
                     dat = Grep.LineDat(self.file.name, line_num, byte_offset, line)
                     self.printed_data['lines'].append(dat)
 
-        def print_info(self, info, filename=None, end=None):
+        def print_info(self, info:str, filename:str=None, end:str=None):
             if self.info_print_fn:
                 self.info_print_fn(info, end=end)
                 if self.save_lines:
@@ -1155,7 +1175,7 @@ class Grep:
                     dat = Grep.InfoDat(filename, info)
                     self.printed_data['info'].append(dat)
 
-        def print_error(self, error, filename=None, end=None):
+        def print_error(self, error:str, filename:str=None, end:str=None):
             if self.error_print_fn:
                 self.error_print_fn(error, end=end)
                 if self.save_lines:
@@ -1164,7 +1184,7 @@ class Grep:
                     dat = Grep.ErrorDat(filename, error)
                     self.printed_data['errors'].append(dat)
 
-        def _format_and_print_line(self, line_format, formatted_line, line_num, byte_offset, line_slices=[]):
+        def _format_and_print_line(self, line_format:str, formatted_line:AnsiString, line_num:int, byte_offset:int, line_slices:List[slice]=[]):
             if not line_slices:
                 # Default to printing the entire line
                 line_slices = [slice(0, None)]
@@ -1186,7 +1206,7 @@ class Grep:
 
             self.something_printed = True
 
-        def parse_complete(self, is_match):
+        def parse_complete(self, is_match:bool):
             '''
             Called when parsing of line is complete.
             Inputs: is_match - True iff the current line is a match
@@ -1235,10 +1255,10 @@ class Grep:
             else:
                 self.current_after_context_counter = 0
 
-    def _make_file_iterable(self, path):
+    def _make_file_iterable(self, path:str):
         return AutoInputFileIterable(path, 'rb', self.end)
 
-    def _generate_line_format(self, grep_color_dict, name_num_sep, name_byte_sep, result_sep):
+    def _generate_line_format(self, grep_color_dict:dict, name_num_sep:str, name_byte_sep:str, result_sep:str) -> str:
         if grep_color_dict and 'se' in grep_color_dict:
             se_color = grep_color_dict['se']
             name_num_sep = str(AnsiString(name_num_sep, se_color))
@@ -1291,7 +1311,7 @@ class Grep:
             line_format += '{line}'
         return line_format
 
-    def _init_line_parsing_data(self, color_enabled:bool, return_matches:bool):
+    def _init_line_parsing_data(self, color_enabled:bool, return_matches:bool) -> LineParsingData:
         '''
         Initializes line parsing data which makes up the local running state of Grep.execute().
         '''
@@ -1420,7 +1440,7 @@ class Grep:
 
         return data
 
-    def _parse_line(self, data:LineParsingData):
+    def _parse_line(self, data:LineParsingData) -> bool:
         '''
         Parses a line from a file, formats line, and prints the line if match is found.
         '''
@@ -1470,7 +1490,7 @@ class Grep:
         data.parse_complete(match_found)
         return match_found
 
-    def _parse_file(self, file:FileIterable, data:LineParsingData, matched_files:list):
+    def _parse_file(self, file:FileIterable, data:LineParsingData, matched_files:list) -> int:
         file_base_name = os.path.basename(file.name)
         marker = len(data.printed_data['lines'])
 
@@ -1492,8 +1512,6 @@ class Grep:
         if not included or excluded:
             return False
 
-        match_found = False
-
         try:
             data.set_file(file)
         except EnvironmentError as ex:
@@ -1502,11 +1520,11 @@ class Grep:
         else:
             try:
                 while data.next_line() and (self.max_count is None or data.num_matches < self.max_count):
-                    if self._parse_line(data):
-                        match_found = True
+                    self._parse_line(data)
+
                 if (
-                    (self.print_matching_files_only and match_found)
-                    or (self.print_non_matching_files_only and not match_found)
+                    (self.print_matching_files_only and data.num_matches > 0)
+                    or (self.print_non_matching_files_only and data.num_matches <= 0)
                 ):
                     data.print_info(data.line_format.format(**data.line_data_dict))
                 elif self.print_count_only:
@@ -1519,17 +1537,19 @@ class Grep:
             except BinaryDetectedException:
                 pass # Skip the rest of the file and continue
 
-        if match_found:
-            if marker != len(data.printed_data['lines']):
-                index = marker
+        if data.num_matches > 0:
+            stop_index = len(data.printed_data['lines'])
+            if marker != stop_index:
+                start_index = marker
             else:
                 # Lines aren't being printed due to option
-                index = None
-            matched_files.append(Grep.FileDat(file.name, index))
+                start_index = None
+                stop_index = None
+            matched_files.append(Grep.FileDat(file.name, start_index, stop_index, data.num_matches))
 
-        return match_found
+        return data.num_matches
 
-    def _is_excluded_dir(self, dir_path):
+    def _is_excluded_dir(self, dir_path:str) -> bool:
         exclude = False
         base_name = os.path.basename(os.path.normpath(dir_path))
         for g in self._dir_exclude_globs:
@@ -1540,12 +1560,12 @@ class Grep:
 
     class GrepResult:
         def __init__(self, files, lines, info, errors):
-            self.files:list[Grep.FileDat] = files
-            self.lines:list[Grep.LineDat] = lines
-            self.info:list[Grep.InfoDat] = info
-            self.errors:list[Grep.ErrorDat] = errors
+            self.files:List[Grep.FileDat] = files
+            self.lines:List[Grep.LineDat] = lines
+            self.info:List[Grep.InfoDat] = info
+            self.errors:List[Grep.ErrorDat] = errors
 
-    def execute(self, return_matches=True) -> GrepResult:
+    def execute(self, return_matches:bool=True) -> GrepResult:
         '''
         Executes Grep with all the assigned attributes.
         Inputs: return_matches - set to True to fill in lines, info, and errors in the result
@@ -1738,7 +1758,7 @@ class GrepArgParser:
             items.extend(values)
             setattr(namespace, self.dest, items)
 
-    def _expand_cli_path(self, path):
+    def _expand_cli_path(self, path:str) -> List[str]:
         if IS_WINDOWS and '*' in path or '?' in path:
             # Need to manually expand this out
             expanded_paths = [f for f in glob.glob(path)]
@@ -1750,10 +1770,10 @@ class GrepArgParser:
             expanded_paths = [path]
         return expanded_paths
 
-    def _expand_cli_paths(self, paths):
+    def _expand_cli_paths(self, paths:List[str]) -> List[str]:
         return [y for x in paths for y in self._expand_cli_path(x)]
 
-    def parse(self, cliargs, grep_object:Grep):
+    def parse(self, cliargs:List[str], grep_object:Grep) -> bool:
         '''
         Parses command line arguments into the given Grep object
         '''
@@ -1909,7 +1929,7 @@ class GrepArgParser:
 
         return True
 
-def main(cliargs):
+def main(cliargs:List[str]) -> int:
     '''
     Performs Grep with given command line arguments
     Returns: 0 on success, non-zero integer on failure
