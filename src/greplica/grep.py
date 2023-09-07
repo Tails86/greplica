@@ -180,7 +180,7 @@ class InputStreamIterable(FileIterable):
     '''
     Reads from existing file and returns lines as bytes or strings.
     '''
-    def __init__(self, in_file:io.IOBase=sys.stdin, as_bytes:bool=True, end:str='\n', label:str='(standard input)'):
+    def __init__(self, in_file:io.TextIOWrapper=sys.stdin, as_bytes:bool=True, end:str='\n', label:str='(standard input)'):
         self._in_file = in_file
         self._as_bytes = as_bytes
         self._end = end
@@ -684,7 +684,7 @@ class Grep:
         def isatty(self) -> bool:
             return False
 
-    def __init__(self, out_file:io.IOBase=None, err_file:io.IOBase=None, default_in_file:io.IOBase=None):
+    def __init__(self, out_file:io.IOBase=None, err_file:io.IOBase=None, default_in_file:io.TextIOWrapper=None):
         '''
         Initializes Grep
         Inputs: out_file - a file object to pass to print() as 'file' for regular messages.
