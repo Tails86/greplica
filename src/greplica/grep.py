@@ -445,7 +445,7 @@ class AnsiString:
     def apply_formatting_for_match(
             self,
             setting_or_settings:Union[List[str], str, List[AnsiFormat], AnsiFormat],
-            match_object:re.Match,
+            match_object,
             group:int=0
     ):
         '''
