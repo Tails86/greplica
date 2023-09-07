@@ -158,18 +158,22 @@ grep_obj.add_files('file1.txt', 'path/to/file2.txt', 'path/to/directory/')
 grep_obj.directory_handling_type = Grep.Directory.RECURSE
 data = grep_obj.execute()
 
-# Prints a list of Grep.FileDat objects which contain filename and index. The value of
-# index is the index into data.lines where the matching lines for this file starts.
-# index will be None only when certain options prevent output to data.lines.
+# Prints a list of Grep.FileDat objects which contain filename, start_index,
+# stop_index, and num_matches. The values of start_index and stop_index are the start
+# and stop indices into data.lines that matching in this file. start_index and
+# stop_index will be None only when certain options prevent output to data.lines.
+# num_matches may be less than (stop_index - start_index) if data.lines contain
+# context separator lines when either *_context_count value is greater than 0 and
+# context_sep is not ''.
 # ex:
-# file1.txt, 0
-# path/to/file2.txt, 1
+# file1.txt, 0, 1, 1
+# path/to/file2.txt, 1, 2, 1
 for f in data.files:
-  print('{}, {}'.format(f.filename, f.index))
+  print('{}, {}, {}, {}'.format(f.filename, f.start_index, f.stop_index, f.num_matches))
 
 # Prints a list of Grep.LineDat objects which contain filename, line_num, byte_offset,
 # and line. Context separator will be its own element in this list when either
-# *_context_count values are greater than 0 and context_sep is not ''. In those cases,
+# *_context_count value is greater than 0 and context_sep is not ''. In those cases,
 # line_num and byte_offset will be None.
 # ex:
 # file1.txt, 3, 117, hello world!
@@ -193,46 +197,46 @@ for e in data.errors:
 
 The following describes initialization arguments to Grep.
 ```py
-__init__(self, out_file=None, err_file=None, default_in_file=None)
+__init__(self, out_file:io.IOBase=None, err_file:io.IOBase=None, default_in_file:io.IOBase=None)
   '''
   Initializes Grep
   Inputs: out_file - a file object to pass to print() as 'file' for regular messages.
-                     This should be set to sys.stdout if writing to terminal is desired.
-                     Writing to file is skipped when this is set to None. (default: None)
+                      This should be set to sys.stdout if writing to terminal is desired.
+                      Writing to file is skipped when this is set to None. (default: None)
           err_file - a file object to pass to print() as 'file' for error messages.
-                     This should be set to sys.stderr if writing to terminal is desired.
-                     Writing to file is skipped when this is set to None. (default: None)
+                      This should be set to sys.stderr if writing to terminal is desired.
+                      Writing to file is skipped when this is set to None. (default: None)
           default_in_file - default input file stream used when no files added.
-                     This should be set to sys.stdin if reading from terminal is desired by default.
-                     An exception will be caused on execute() if this is None and no files added.
-                     (default: None)
+                      This should be set to sys.stdin if reading from terminal is desired by default.
+                      An exception will be caused on execute() if this is None and no files added.
+                      (default: None)
   '''
 ```
 
 The following methods may be called to add expressions, file paths, and globs.
 ```py
-add_dir_exclude_globs(self, *args)
+add_dir_exclude_globs(self, *args:Union[str, List[str]])
   '''
   Skip directories that match given globs.
   '''
 
-add_expressions(self, *args)
+add_expressions(self, *args:Union[str, List[str]])
   '''
   Adds a single expression or list of expressions that Grep will search for in selected files.
   Inputs: all arguments must be list of strings or string - each string is an expression
   '''
 
-add_file_exclude_globs(self, *args)
+add_file_exclude_globs(self, *args:Union[str, List[str]])
   '''
   Skip files that match given globs.
   '''
 
-add_file_include_globs(self, *args)
+add_file_include_globs(self, *args:Union[str, List[str]])
   '''
   Limit files to those matching given globs.
   '''
 
-add_files(self, *args)
+add_files(self, *args:Union[str, List[str]])
   '''
   Adds a single file or list of files that Grep will crawl through. Each entry must be a path
   to a file or directory. Directories are handled based on value of directory_handling_type.
@@ -240,6 +244,9 @@ add_files(self, *args)
   '''
 
 clear_dir_exclude_globs(self)
+  '''
+  Clear all directory exclude globs previously added by add_dir_exclude_globs().
+  '''
 
 clear_expressions(self)
   '''
@@ -247,8 +254,14 @@ clear_expressions(self)
   '''
 
 clear_file_exclude_globs(self)
+  '''
+  Clear all file exclude globs previously added by add_file_exclude_globs().
+  '''
 
 clear_file_include_globs(self)
+  '''
+  Clear all file include globs previously added by add_file_include_globs().
+  '''
 
 clear_files(self)
   '''
@@ -385,7 +398,7 @@ reset(self)
 
 The following method executes using all data set above.
 ```py
-execute(self, return_matches=True)
+execute(self, return_matches:bool=True) -> GrepResult
   '''
   Executes Grep with all the assigned attributes.
   Inputs: return_matches - set to True to fill in lines, info, and errors in the result

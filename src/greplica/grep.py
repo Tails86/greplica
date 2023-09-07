@@ -843,6 +843,9 @@ class Grep:
                 raise TypeError('Invalid type ({}) for include glob'.format(type(arg)))
 
     def clear_file_include_globs(self):
+        '''
+        Clear all file include globs previously added by add_file_include_globs().
+        '''
         self._file_include_globs = []
 
     def add_file_exclude_globs(self, *args:Union[str, List[str]]):
@@ -858,6 +861,9 @@ class Grep:
                 raise TypeError('Invalid type ({}) for exclude glob'.format(type(arg)))
 
     def clear_file_exclude_globs(self):
+        '''
+        Clear all file exclude globs previously added by add_file_exclude_globs().
+        '''
         self._file_exclude_globs = []
 
     def add_dir_exclude_globs(self, *args:Union[str, List[str]]):
@@ -873,6 +879,9 @@ class Grep:
                 raise TypeError('Invalid type ({}) for dir exclude glob'.format(type(arg)))
 
     def clear_dir_exclude_globs(self):
+        '''
+        Clear all directory exclude globs previously added by add_dir_exclude_globs().
+        '''
         self._dir_exclude_globs = []
 
     @property
