@@ -2,6 +2,12 @@
 
 A grep clone in Python with both CLI and library interfaces, supporting ANSI color coding and more.
 
+## Shameless Promotion
+
+Check out my other Python clone tools:
+- [refind](https://pypi.org/project/refind/)
+- [sedeuce](https://pypi.org/project/sedeuce/)
+
 ## Known Differences with grep
 
 - The -D, --devices option is not supported and no support is planned. All inputs are handled as
