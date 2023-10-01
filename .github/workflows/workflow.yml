@@ -22,9 +22,3 @@ jobs:
       run: |
         python setup.py sdist
         twine upload --repository pypi -u "$USER" -p "$PSWD" dist/*
-    - name: Archive production artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: dist
-        path: |
-          dist
