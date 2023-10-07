@@ -110,11 +110,16 @@ class AutoInputFileIterable(FileIterable):
     '''
     Automatically opens file on iteration and returns lines as bytes or strings.
     '''
+
+    # How much to read on each read operation
+    READ_LEN = 1024
+
     def __init__(self, file_path:str, file_mode:str='rb', newline_str:str='\n'):
         self._file_path = file_path
         self._file_mode = file_mode
         self._newline_str = newline_str
         self._as_bytes = 'b' in file_mode
+        self._buffer = b''
         if isinstance(self._newline_str, str):
             self._newline_str = self._newline_str.encode()
         self._fp = None
@@ -137,31 +142,34 @@ class AutoInputFileIterable(FileIterable):
     def __next__(self) -> Union[str, bytes]:
         # Custom iteration
         if self._fp:
-            b = b''
+            b = self._buffer
             last_b = b' '
-            end = b''
-            newline_len = len(self._newline_str)
-            while end != self._newline_str:
-                last_b = self._fp.read(1)
+            newline_idx = b.find(self._newline_str)
+            while newline_idx < 0:
+                last_b = self._fp.read(__class__.READ_LEN)
                 if last_b:
                     if len(b) < __class__.LINE_BYTE_LIMIT:
                         b += last_b
                     # else: overflow - can be detected by checking that the line ends with newline_str
-                    end += last_b
-                    end = end[-newline_len:]
+                    newline_idx = b.find(self._newline_str)
                 else:
                     # End of file
                     self._fp.close()
                     self._fp = None
+                    newline_idx = len(b)
                     break
             if b:
+                idx = newline_idx + len(self._newline_str)
+                next_line = b[:idx]
+                self._buffer = b[idx:]
+
                 if self._as_bytes:
-                    return b
+                    return next_line
                 else:
                     try:
-                        return b.decode()
+                        return next_line.decode()
                     except UnicodeDecodeError:
-                        return b
+                        return next_line
             else:
                 self._fp = None
                 raise StopIteration
@@ -174,7 +182,7 @@ class AutoInputFileIterable(FileIterable):
 
     @property
     def eof(self) -> bool:
-        return (self._fp is None)
+        return (self._fp is None and not self._buffer)
 
 class InputStreamIterable(FileIterable):
     '''
