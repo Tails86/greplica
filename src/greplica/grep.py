@@ -34,7 +34,7 @@ import io
 from io import StringIO
 from typing import Any, Union, List
 
-__version__ = '1.2.6'
+__version__ = '1.2.7'
 PACKAGE_NAME = 'greplica'
 
 IS_WINDOWS = sys.platform.lower().startswith('win')
